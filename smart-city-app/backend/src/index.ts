@@ -3,6 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import OpenAI from 'openai';
+import { publicTransportService } from './transport';
+import { sharedMobilityService } from './mobility';
+import { weatherService } from './weather';
 
 // Load environment variables
 dotenv.config();
@@ -430,9 +433,17 @@ app.get('/api/health', (req, res) => {
     message: 'AI Smart City Backend is running',
     timestamp: new Date().toISOString(),
     features: {
-      openai: !!openai,
-      geospatial: true
-    }
+      geocoding: true,
+      places: true,
+      routes: true,
+      ai: !!openai,
+      publicTransport: true,
+      sharedMobility: true,
+      weather: true,
+      multiModalRouting: true
+    },
+    version: '3.0.0',
+    phase: 'Phase 3 - Advanced Features'
   });
 });
 
@@ -532,29 +543,269 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
-// Mock routes endpoint (will be enhanced in Phase 3)
-app.get('/api/routes', (req, res) => {
-  const { from, to } = req.query;
+// Enhanced routes endpoint with multiple transport options
+app.get('/api/routes', async (req, res) => {
+  const { from, to, mode = 'walking' } = req.query;
   
-  const mockRoute = {
-    id: Date.now().toString(),
-    from: from,
-    to: to,
-    distance: '2.5 km',
-    duration: '15 minutes',
-    steps: [
-      { instruction: 'Head north on Váci Street', distance: '500m' },
-      { instruction: 'Turn right onto Kossuth Lajos Street', distance: '800m' },
-      { instruction: 'Continue straight to destination', distance: '1.2km' }
-    ],
-    polyline: [
-      [47.4979, 19.0402],
-      [47.5079, 19.0502],
-      [47.5179, 19.0602]
-    ]
-  };
+  try {
+    if (mode === 'public_transport') {
+      // Public transport route
+      const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
+      const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
+      
+      const transportRoute = await publicTransportService.planJourney(
+        [fromCoords[0], fromCoords[1]],
+        [toCoords[0], toCoords[1]]
+      );
+      
+      if (transportRoute) {
+        res.json({
+          id: Date.now().toString(),
+          mode: 'public_transport',
+          from: from,
+          to: to,
+          distance: `${(transportRoute.duration * 0.5).toFixed(1)} km`,
+          duration: `${transportRoute.duration} minutes`,
+          transfers: transportRoute.transfers,
+          steps: transportRoute.steps.map(step => ({
+            instruction: `${step.type}: ${step.from} to ${step.to}`,
+            distance: step.distance ? `${step.distance}m` : 'N/A',
+            type: step.type,
+            route: step.route
+          })),
+          polyline: transportRoute.steps.map(step => [step.from, step.to])
+        });
+      } else {
+        res.status(404).json({ error: 'No public transport route found' });
+      }
+    } else if (mode === 'cycling') {
+      // Cycling route
+      const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
+      const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
+      
+      const bikeRoute = await sharedMobilityService.getBikeRoute(
+        [fromCoords[0], fromCoords[1]],
+        [toCoords[0], toCoords[1]]
+      );
+      
+      if (bikeRoute) {
+        res.json({
+          id: Date.now().toString(),
+          mode: 'cycling',
+          from: from,
+          to: to,
+          distance: `${(bikeRoute.distance / 1000).toFixed(1)} km`,
+          duration: `${Math.round(bikeRoute.duration / 60)} minutes`,
+          steps: bikeRoute.instructions.map(instruction => ({
+            instruction,
+            distance: 'N/A',
+            type: 'cycling'
+          })),
+          polyline: bikeRoute.geometry
+        });
+      } else {
+        res.status(404).json({ error: 'No cycling route found' });
+      }
+    } else {
+      // Walking route (existing mock)
+      const mockRoute = {
+        id: Date.now().toString(),
+        mode: 'walking',
+        from: from,
+        to: to,
+        distance: '2.5 km',
+        duration: '15 minutes',
+        steps: [
+          { instruction: 'Head north on Váci Street', distance: '500m' },
+          { instruction: 'Turn right onto Kossuth Lajos Street', distance: '800m' },
+          { instruction: 'Continue straight to destination', distance: '1.2km' }
+        ],
+        polyline: [
+          [47.4979, 19.0402],
+          [47.5079, 19.0502],
+          [47.5179, 19.0602]
+        ]
+      };
+      
+      res.json(mockRoute);
+    }
+  } catch (error) {
+    console.error('Route planning error:', error);
+    res.status(500).json({ 
+      error: 'Failed to plan route',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Public transport endpoints
+app.get('/api/transport/stops', async (req, res) => {
+  const { lat, lng, radius = 500 } = req.query;
   
-  res.json(mockRoute);
+  try {
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const stops = await publicTransportService.getNearbyStops(
+      parseFloat(lat as string),
+      parseFloat(lng as string),
+      parseInt(radius as string)
+    );
+
+    res.json({
+      stops,
+      count: stops.length,
+      location: { lat, lng },
+      radius: parseInt(radius as string)
+    });
+  } catch (error) {
+    console.error('Transport stops error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch transport stops',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/transport/arrivals/:stopId', async (req, res) => {
+  const { stopId } = req.params;
+  
+  try {
+    const arrivals = await publicTransportService.getStopArrivals(stopId);
+    res.json({
+      stopId,
+      arrivals,
+      count: arrivals.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Transport arrivals error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch arrivals',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/transport/disruptions', async (req, res) => {
+  try {
+    const disruptions = await publicTransportService.getDisruptions();
+    res.json({
+      disruptions,
+      count: disruptions.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Transport disruptions error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch disruptions',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Shared mobility endpoints
+app.get('/api/mobility/bikes', async (req, res) => {
+  const { lat, lng, radius = 1000 } = req.query;
+  
+  try {
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const bikeStations = await sharedMobilityService.getNearbyBikeStations(
+      parseFloat(lat as string),
+      parseFloat(lng as string),
+      parseInt(radius as string)
+    );
+
+    res.json({
+      stations: bikeStations,
+      count: bikeStations.length,
+      location: { lat, lng },
+      radius: parseInt(radius as string)
+    });
+  } catch (error) {
+    console.error('Bike stations error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch bike stations',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/mobility/summary', async (req, res) => {
+  try {
+    const summary = await sharedMobilityService.getBikeAvailabilitySummary();
+    res.json({
+      summary,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Bike summary error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch bike summary',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Weather endpoints
+app.get('/api/weather/current', async (req, res) => {
+  try {
+    const weather = await weatherService.getCurrentWeather();
+    if (weather) {
+      const context = weatherService.getWeatherContext(weather);
+      res.json({
+        weather,
+        context,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to fetch weather data' });
+    }
+  } catch (error) {
+    console.error('Weather error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch weather',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/weather/forecast', async (req, res) => {
+  try {
+    const forecast = await weatherService.getWeatherForecast();
+    res.json({
+      forecast,
+      count: forecast.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Weather forecast error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch weather forecast',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/weather/alerts', async (req, res) => {
+  try {
+    const alerts = await weatherService.getWeatherAlerts();
+    res.json({
+      alerts,
+      count: alerts.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Weather alerts error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch weather alerts',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Error handling middleware

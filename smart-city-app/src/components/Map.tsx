@@ -27,6 +27,10 @@ const icons = {
   restaurant: createCustomIcon('#f59e0b'), // amber
   hospital: createCustomIcon('#ef4444'), // red
   bank: createCustomIcon('#3b82f6'), // blue
+  metro: createCustomIcon('#dc2626'), // red
+  bus: createCustomIcon('#2563eb'), // blue
+  tram: createCustomIcon('#059669'), // green
+  bike_station: createCustomIcon('#7c3aed'), // purple
   default: createCustomIcon('#6b7280'), // gray
   destination: createCustomIcon('#8b5cf6'), // purple
   user: createCustomIcon('#06b6d4') // cyan
@@ -186,6 +190,26 @@ export default function Map({ center, zoom = 13, markers = [], route }: MapProps
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-amber-500"></div>
             <span className="text-xs">Restaurant</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-xs">Bank</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-600"></div>
+            <span className="text-xs">Metro</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-600"></div>
+            <span className="text-xs">Bus</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-emerald-600"></div>
+            <span className="text-xs">Tram</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-violet-600"></div>
+            <span className="text-xs">Bike Station</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-purple-500"></div>

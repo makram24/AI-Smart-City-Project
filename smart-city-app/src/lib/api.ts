@@ -16,14 +16,16 @@ export interface MapMarker {
   position: [number, number];
   title: string;
   description?: string;
-  type?: string;
+  type?: 'pharmacy' | 'restaurant' | 'bank' | 'metro' | 'bus' | 'tram' | 'bike_station';
+  icon?: string;
 }
 
 export interface RouteData {
   distance: string;
   duration: string;
-  steps: Array<{ instruction: string; distance: string }>;
+  steps: Array<{ instruction: string; distance: string; type?: string; route?: string }>;
   polyline: number[][];
+  mode?: 'walking' | 'cycling' | 'public_transport';
 }
 
 export interface Place {
@@ -39,6 +41,36 @@ export interface GeocodeResult {
   lat: number;
   lng: number;
   display_name: string;
+}
+
+export interface TransportStop {
+  id: string;
+  name: string;
+  position: [number, number];
+  type: 'bus' | 'tram' | 'metro' | 'trolley';
+  routes: string[];
+}
+
+export interface BikeStation {
+  stationId: string;
+  stationName: string;
+  availableBikes: number;
+  availableDocks: number;
+  distance: number;
+}
+
+export interface WeatherData {
+  temperature: number;
+  feelsLike: number;
+  humidity: number;
+  description: string;
+  icon: string;
+}
+
+export interface WeatherContext {
+  isGoodForCycling: boolean;
+  isGoodForWalking: boolean;
+  recommendations: string[];
 }
 
 class ApiService {
@@ -88,15 +120,102 @@ class ApiService {
   }
 
   // Routes API
-  async getRoute(from: string, to: string): Promise<RouteData> {
+  async getRoute(from: string, to: string, mode: 'walking' | 'cycling' | 'public_transport' = 'walking'): Promise<RouteData> {
     try {
       const response = await this.api.get('/api/routes', {
-        params: { from, to }
+        params: { from, to, mode }
       });
       return response.data;
     } catch (error) {
       console.error('Routes API error:', error);
       throw error;
+    }
+  }
+
+  // Public transport API
+  async getTransportStops(lat: number, lng: number, radius: number = 500): Promise<TransportStop[]> {
+    try {
+      const response = await this.api.get('/api/transport/stops', {
+        params: { lat, lng, radius }
+      });
+      return response.data.stops || [];
+    } catch (error) {
+      console.error('Transport stops API error:', error);
+      return [];
+    }
+  }
+
+  async getStopArrivals(stopId: string): Promise<any[]> {
+    try {
+      const response = await this.api.get(`/api/transport/arrivals/${stopId}`);
+      return response.data.arrivals || [];
+    } catch (error) {
+      console.error('Stop arrivals API error:', error);
+      return [];
+    }
+  }
+
+  async getTransportDisruptions(): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/transport/disruptions');
+      return response.data.disruptions || [];
+    } catch (error) {
+      console.error('Transport disruptions API error:', error);
+      return [];
+    }
+  }
+
+  // Shared mobility API
+  async getBikeStations(lat: number, lng: number, radius: number = 1000): Promise<BikeStation[]> {
+    try {
+      const response = await this.api.get('/api/mobility/bikes', {
+        params: { lat, lng, radius }
+      });
+      return response.data.stations || [];
+    } catch (error) {
+      console.error('Bike stations API error:', error);
+      return [];
+    }
+  }
+
+  async getBikeSummary(): Promise<any> {
+    try {
+      const response = await this.api.get('/api/mobility/summary');
+      return response.data.summary;
+    } catch (error) {
+      console.error('Bike summary API error:', error);
+      return null;
+    }
+  }
+
+  // Weather API
+  async getCurrentWeather(): Promise<{ weather: WeatherData; context: WeatherContext } | null> {
+    try {
+      const response = await this.api.get('/api/weather/current');
+      return response.data;
+    } catch (error) {
+      console.error('Weather API error:', error);
+      return null;
+    }
+  }
+
+  async getWeatherForecast(): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/weather/forecast');
+      return response.data.forecast || [];
+    } catch (error) {
+      console.error('Weather forecast API error:', error);
+      return [];
+    }
+  }
+
+  async getWeatherAlerts(): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/weather/alerts');
+      return response.data.alerts || [];
+    } catch (error) {
+      console.error('Weather alerts API error:', error);
+      return [];
     }
   }
 

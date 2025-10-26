@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Chat from "@/components/Chat";
+import TransportPanel from "@/components/TransportPanel";
 import { apiService, ChatMessage, MapMarker } from "@/lib/api";
 
 // Dynamically import Map to avoid SSR issues
@@ -192,6 +193,41 @@ export default function Home() {
     return newMarkers;
   };
 
+  const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
+    if (!userLocation) return;
+
+    setIsLoading(true);
+    try {
+      const route = await apiService.getRoute(
+        `${userLocation.lat},${userLocation.lng}`,
+        destination,
+        mode
+      );
+
+      if (route) {
+        setCurrentRoute({
+          polyline: route.polyline,
+          distance: route.distance,
+          duration: route.duration
+        });
+
+        // Add route message
+        const routeMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: `Route planned: ${route.distance} in ${route.duration} by ${mode.replace('_', ' ')}`,
+          sender: 'ai',
+          timestamp: new Date().toISOString(),
+          route: route
+        };
+        setMessages(prev => [...prev, routeMessage]);
+      }
+    } catch (error) {
+      console.error('Route planning error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen flex">
       {/* Map Section - Left Side */}
@@ -201,6 +237,14 @@ export default function Home() {
           zoom={13}
           markers={mapMarkers}
           route={currentRoute || undefined}
+        />
+      </div>
+      
+      {/* Transport Panel - Middle */}
+      <div className="w-80 h-full">
+        <TransportPanel 
+          userLocation={userLocation}
+          onRouteRequest={handleRouteRequest}
         />
       </div>
       
