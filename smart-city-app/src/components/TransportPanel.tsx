@@ -30,6 +30,7 @@ export default function TransportPanel({ userLocation, onRouteRequest }: Transpo
   const [destination, setDestination] = useState("");
   const [selectedMode, setSelectedMode] = useState<'walking' | 'cycling' | 'public_transport'>('walking');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userLocation) {
@@ -43,15 +44,20 @@ export default function TransportPanel({ userLocation, onRouteRequest }: Transpo
     
     setLoading(true);
     try {
+      console.log('Loading transport data for location:', userLocation);
       const [stops, bikes] = await Promise.all([
         apiService.getTransportStops(userLocation.lat, userLocation.lng, 500),
         apiService.getBikeStations(userLocation.lat, userLocation.lng, 1000)
       ]);
       
+      console.log('Transport stops loaded:', stops);
+      console.log('Bike stations loaded:', bikes);
+      
       setTransportStops(stops);
       setBikeStations(bikes);
     } catch (error) {
       console.error('Error loading transport data:', error);
+      setError('Failed to load transport data');
     } finally {
       setLoading(false);
     }
@@ -59,13 +65,16 @@ export default function TransportPanel({ userLocation, onRouteRequest }: Transpo
 
   const loadWeatherData = async () => {
     try {
+      console.log('Loading weather data...');
       const weatherData = await apiService.getCurrentWeather();
+      console.log('Weather data loaded:', weatherData);
       if (weatherData) {
         setWeather(weatherData.weather);
         setWeatherContext(weatherData.context);
       }
     } catch (error) {
       console.error('Error loading weather data:', error);
+      setError('Failed to load weather data');
     }
   };
 
@@ -160,8 +169,19 @@ export default function TransportPanel({ userLocation, onRouteRequest }: Transpo
         <div className="p-4">
           <h3 className="text-sm font-medium text-gray-900 mb-3">Nearby Transport</h3>
           
+          {error && (
+            <div className="text-center text-sm text-red-500 mb-3">{error}</div>
+          )}
+          
+          {/* Debug info */}
+          <div className="text-xs text-gray-400 mb-2">
+            Debug: Stops: {transportStops.length}, Bikes: {bikeStations.length}, Weather: {weather ? 'Yes' : 'No'}
+          </div>
+          
           {loading ? (
-            <div className="text-center text-sm text-gray-500">Loading...</div>
+            <div className="text-center text-sm text-gray-500">Loading transport data...</div>
+          ) : !userLocation ? (
+            <div className="text-center text-sm text-gray-500">Location not available</div>
           ) : (
             <div className="space-y-3">
               {/* Metro Stops */}
