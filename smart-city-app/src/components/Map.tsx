@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 
 // Fix for default markers in React Leaflet
@@ -12,13 +13,22 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-// Custom icons for different marker types
-const createCustomIcon = (color: string) => {
+// Custom icons for different marker types with animations
+const createCustomIcon = (color: string, size: number = 20) => {
   return L.divIcon({
     className: 'custom-marker',
-    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10]
+    html: `<div style="
+      background-color: ${color}; 
+      width: ${size}px; 
+      height: ${size}px; 
+      border-radius: 50%; 
+      border: 2px solid white; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    "></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2]
   });
 };
 
@@ -44,11 +54,20 @@ interface MapProps {
     title: string;
     description?: string;
     type?: string;
+    rating?: number;
+    hours?: string;
+    phone?: string;
+    website?: string;
+    image?: string;
   }>;
   route?: {
     polyline: number[][];
     distance: string;
     duration: string;
+  };
+  filters?: {
+    categories: string[];
+    maxDistance: number;
   };
 }
 
@@ -64,7 +83,7 @@ function MapController({ center, zoom }: { center?: [number, number]; zoom?: num
   return null;
 }
 
-export default function Map({ center, zoom = 13, markers = [], route }: MapProps) {
+export default function Map({ center, zoom = 13, markers = [], route, filters }: MapProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([47.4979, 19.0402]); // Budapest coordinates
   const [isClient, setIsClient] = useState(false);
@@ -93,6 +112,27 @@ export default function Map({ center, zoom = 13, markers = [], route }: MapProps
 
   const finalCenter = center || mapCenter;
 
+  // Filter markers based on filters
+  const filteredMarkers = markers.filter(marker => {
+    if (filters?.categories && filters.categories.length > 0) {
+      if (!filters.categories.includes(marker.type || 'default')) {
+        return false;
+      }
+    }
+    
+    if (filters?.maxDistance && userLocation) {
+      const distance = calculateDistance(
+        userLocation[0], userLocation[1],
+        marker.position[0], marker.position[1]
+      );
+      if (distance > filters.maxDistance) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
   // Get icon for marker type
   const getMarkerIcon = (type?: string) => {
     if (!type) return icons.default;
@@ -101,6 +141,23 @@ export default function Map({ center, zoom = 13, markers = [], route }: MapProps
 
   // Convert polyline coordinates for Leaflet
   const routeCoordinates = route?.polyline?.map(coord => [coord[1], coord[0]] as [number, number]) || [];
+
+  // Calculate distance between two points
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371;
+    const dLat = deg2rad(lat2 - lat1);
+    const dLng = deg2rad(lng2 - lng1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const deg2rad = (deg: number): number => {
+    return deg * (Math.PI/180);
+  };
 
   if (!isClient) {
     return (
@@ -151,28 +208,103 @@ export default function Map({ center, zoom = 13, markers = [], route }: MapProps
           </Marker>
         )}
         
-        {/* Additional markers */}
-        {markers.map((marker, index) => (
-          <Marker key={index} position={marker.position} icon={getMarkerIcon(marker.type)}>
-            <Popup>
-              <div className="text-center">
-                <strong>{marker.title}</strong>
-                {marker.description && (
-                  <>
-                    <br />
-                    <small>{marker.description}</small>
-                  </>
-                )}
-                {marker.type && (
-                  <>
-                    <br />
-                    <span className="text-xs text-gray-500 capitalize">{marker.type}</span>
-                  </>
-                )}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {/* Clustered markers */}
+        <MarkerClusterGroup
+          chunkedLoading
+          spiderfyOnMaxZoom={true}
+          showCoverageOnHover={false}
+          zoomToBoundsOnClick={true}
+          maxClusterRadius={50}
+          iconCreateFunction={(cluster) => {
+            const count = cluster.getChildCount();
+            let size = 'small';
+            if (count < 10) size = 'small';
+            else if (count < 100) size = 'medium';
+            else size = 'large';
+            
+            return L.divIcon({
+              html: `<div class="cluster-marker cluster-${size}">${count}</div>`,
+              className: 'custom-cluster',
+              iconSize: L.point(40, 40, true)
+            });
+          }}
+        >
+          {filteredMarkers.map((marker, index) => (
+            <Marker key={index} position={marker.position} icon={getMarkerIcon(marker.type)}>
+              <Popup maxWidth={300} minWidth={250}>
+                <div className="popup-content">
+                  {marker.image && (
+                    <div className="popup-image mb-2">
+                      <img 
+                        src={marker.image} 
+                        alt={marker.title}
+                        className="w-full h-24 object-cover rounded"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                  <div className="popup-header mb-2">
+                    <h3 className="font-semibold text-lg text-gray-900">{marker.title}</h3>
+                    {marker.rating && (
+                      <div className="flex items-center mt-1">
+                        <span className="text-yellow-500">★</span>
+                        <span className="ml-1 text-sm text-gray-600">{marker.rating}/5</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {marker.description && (
+                    <p className="text-sm text-gray-700 mb-2">{marker.description}</p>
+                  )}
+                  
+                  <div className="popup-details space-y-1">
+                    {marker.hours && (
+                      <div className="flex items-center text-xs text-gray-600">
+                        <span className="font-medium">Hours:</span>
+                        <span className="ml-1">{marker.hours}</span>
+                      </div>
+                    )}
+                    {marker.phone && (
+                      <div className="flex items-center text-xs text-gray-600">
+                        <span className="font-medium">Phone:</span>
+                        <a href={`tel:${marker.phone}`} className="ml-1 text-blue-600 hover:underline">
+                          {marker.phone}
+                        </a>
+                      </div>
+                    )}
+                    {marker.website && (
+                      <div className="flex items-center text-xs text-gray-600">
+                        <span className="font-medium">Website:</span>
+                        <a href={marker.website} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-600 hover:underline">
+                          Visit
+                        </a>
+                      </div>
+                    )}
+                    {marker.type && (
+                      <div className="flex items-center text-xs text-gray-500">
+                        <span className="font-medium">Type:</span>
+                        <span className="ml-1 capitalize">{marker.type}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {userLocation && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="text-xs text-gray-500">
+                        Distance: {calculateDistance(
+                          userLocation[0], userLocation[1],
+                          marker.position[0], marker.position[1]
+                        ).toFixed(1)} km
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+        </MarkerClusterGroup>
       </MapContainer>
       
       {/* Map controls overlay */}
