@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Chat from "@/components/Chat";
 import TransportPanel from "@/components/TransportPanel";
+import MapFilters from "@/components/MapFilters";
 import { apiService, ChatMessage, MapMarker } from "@/lib/api";
 
 // Dynamically import Map to avoid SSR issues
@@ -30,6 +31,13 @@ export default function Home() {
     distance: string;
     duration: string;
   } | null>(null);
+  const [mapFilters, setMapFilters] = useState<{
+    categories: string[];
+    maxDistance: number;
+  }>({
+    categories: [],
+    maxDistance: 2
+  });
 
   // Check API connection on mount
   useEffect(() => {
@@ -152,19 +160,30 @@ export default function Home() {
           position: [47.4979, 19.0402],
           title: "Budapest Pharmacy",
           description: "Open until 8 PM",
-          type: "pharmacy"
+          type: "pharmacy",
+          rating: 4.2,
+          hours: "Mon-Fri: 8:00-20:00",
+          phone: "+36 1 234 5678",
+          image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=300&h=200&fit=crop"
         },
         {
           position: [47.5079, 19.0502],
           title: "City Center Pharmacy",
           description: "24/7 Emergency service",
-          type: "pharmacy"
+          type: "pharmacy",
+          rating: 4.5,
+          hours: "24/7",
+          phone: "+36 1 234 5679",
+          image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=300&h=200&fit=crop"
         },
         {
           position: [47.4879, 19.0302],
           title: "District VII Pharmacy",
           description: "Open until 6 PM",
-          type: "pharmacy"
+          type: "pharmacy",
+          rating: 3.8,
+          hours: "Mon-Fri: 9:00-18:00",
+          phone: "+36 1 234 5680"
         }
       ];
     } else if (lowerQuery.includes("restaurant") || lowerQuery.includes("food")) {
@@ -173,19 +192,34 @@ export default function Home() {
           position: [47.4979, 19.0402],
           title: "Café Central",
           description: "Traditional Hungarian cuisine",
-          type: "restaurant"
+          type: "restaurant",
+          rating: 4.7,
+          hours: "Mon-Sun: 10:00-22:00",
+          phone: "+36 1 234 5681",
+          website: "https://cafecentral.hu",
+          image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=300&h=200&fit=crop"
         },
         {
           position: [47.5079, 19.0502],
           title: "McDonald's",
           description: "Fast food, open 24/7",
-          type: "restaurant"
+          type: "restaurant",
+          rating: 3.5,
+          hours: "24/7",
+          phone: "+36 1 234 5682",
+          website: "https://mcdonalds.hu",
+          image: "https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=300&h=200&fit=crop"
         },
         {
           position: [47.4879, 19.0302],
           title: "Buda Castle Restaurant",
           description: "Fine dining with city views",
-          type: "restaurant"
+          type: "restaurant",
+          rating: 4.9,
+          hours: "Tue-Sun: 18:00-23:00",
+          phone: "+36 1 234 5683",
+          website: "https://budacastle.hu",
+          image: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300&h=200&fit=crop"
         }
       ];
     }
@@ -237,6 +271,11 @@ export default function Home() {
           zoom={13}
           markers={mapMarkers}
           route={currentRoute || undefined}
+          filters={mapFilters}
+        />
+        <MapFilters 
+          onFiltersChange={setMapFilters}
+          userLocation={userLocation}
         />
       </div>
       

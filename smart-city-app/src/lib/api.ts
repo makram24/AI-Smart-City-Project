@@ -18,6 +18,11 @@ export interface MapMarker {
   description?: string;
   type?: 'pharmacy' | 'restaurant' | 'bank' | 'metro' | 'bus' | 'tram' | 'bike_station';
   icon?: string;
+  rating?: number;
+  hours?: string;
+  phone?: string;
+  website?: string;
+  image?: string;
 }
 
 export interface RouteData {

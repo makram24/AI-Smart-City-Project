@@ -215,7 +215,7 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
           showCoverageOnHover={false}
           zoomToBoundsOnClick={true}
           maxClusterRadius={50}
-          iconCreateFunction={(cluster) => {
+          iconCreateFunction={(cluster: any) => {
             const count = cluster.getChildCount();
             let size = 'small';
             if (count < 10) size = 'small';
