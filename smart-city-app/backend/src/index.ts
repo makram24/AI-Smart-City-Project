@@ -6,6 +6,7 @@ import OpenAI from 'openai';
 import { publicTransportService } from './transport';
 import { sharedMobilityService } from './mobility';
 import { weatherService } from './weather';
+import { routingService } from './routing';
 
 // Load environment variables
 dotenv.config();
@@ -440,7 +441,11 @@ app.get('/api/health', (req, res) => {
       publicTransport: true,
       sharedMobility: true,
       weather: true,
-      multiModalRouting: true
+      multiModalRouting: true,
+      realTimeUpdates: true,
+      openRouteService: !!process.env.OPENROUTESERVICE_API_KEY,
+      bkkApi: process.env.BKK_API_ENABLED === 'true',
+      molBubiApi: process.env.MOL_BUBI_API_ENABLED === 'true'
     },
     version: '3.0.0',
     phase: 'Phase 3 - Advanced Features'
@@ -579,55 +584,61 @@ app.get('/api/routes', async (req, res) => {
         res.status(404).json({ error: 'No public transport route found' });
       }
     } else if (mode === 'cycling') {
-      // Cycling route
+      // Cycling route using OpenRouteService or fallback
       const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
       const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
       
-      const bikeRoute = await sharedMobilityService.getBikeRoute(
+      const cyclingRoute = await routingService.getCyclingRoute(
         [fromCoords[0], fromCoords[1]],
         [toCoords[0], toCoords[1]]
       );
       
-      if (bikeRoute) {
+      if (cyclingRoute) {
         res.json({
           id: Date.now().toString(),
           mode: 'cycling',
           from: from,
           to: to,
-          distance: `${(bikeRoute.distance / 1000).toFixed(1)} km`,
-          duration: `${Math.round(bikeRoute.duration / 60)} minutes`,
-          steps: bikeRoute.instructions.map(instruction => ({
+          distance: routingService.formatDistance(cyclingRoute.distance),
+          duration: routingService.formatDuration(cyclingRoute.duration),
+          steps: cyclingRoute.instructions.map((instruction, index) => ({
             instruction,
-            distance: 'N/A',
+            distance: index < cyclingRoute.instructions.length - 1 ? 'N/A' : routingService.formatDistance(cyclingRoute.distance),
             type: 'cycling'
           })),
-          polyline: bikeRoute.geometry
+          polyline: cyclingRoute.geometry
         });
       } else {
         res.status(404).json({ error: 'No cycling route found' });
       }
     } else {
-      // Walking route (existing mock)
-      const mockRoute = {
-        id: Date.now().toString(),
-        mode: 'walking',
-        from: from,
-        to: to,
-        distance: '2.5 km',
-        duration: '15 minutes',
-        steps: [
-          { instruction: 'Head north on Váci Street', distance: '500m' },
-          { instruction: 'Turn right onto Kossuth Lajos Street', distance: '800m' },
-          { instruction: 'Continue straight to destination', distance: '1.2km' }
-        ],
-        polyline: [
-          [47.4979, 19.0402],
-          [47.5079, 19.0502],
-          [47.5179, 19.0602]
-        ]
-      };
+      // Walking route using OpenRouteService or fallback
+      const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
+      const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
       
-      res.json(mockRoute);
+      const walkingRoute = await routingService.getWalkingRoute(
+        [fromCoords[0], fromCoords[1]],
+        [toCoords[0], toCoords[1]]
+      );
+      
+      if (walkingRoute) {
+        res.json({
+          id: Date.now().toString(),
+          mode: 'walking',
+          from: from,
+          to: to,
+          distance: routingService.formatDistance(walkingRoute.distance),
+          duration: routingService.formatDuration(walkingRoute.duration),
+          steps: walkingRoute.instructions.map((instruction, index) => ({
+            instruction,
+            distance: index < walkingRoute.instructions.length - 1 ? 'N/A' : routingService.formatDistance(walkingRoute.distance),
+            type: 'walking'
+          })),
+          polyline: walkingRoute.geometry
+        });
+      } else {
+        res.status(404).json({ error: 'No walking route found' });
+      }
     }
   } catch (error) {
     console.error('Route planning error:', error);

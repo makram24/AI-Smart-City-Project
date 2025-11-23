@@ -58,6 +58,10 @@ export class WeatherService {
           lon: this.budapestCoords.lng,
           appid: this.openWeatherApiKey,
           units: 'metric'
+        },
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'AI-Smart-City-App/1.0'
         }
       });
 
@@ -93,6 +97,10 @@ export class WeatherService {
           lon: this.budapestCoords.lng,
           appid: this.openWeatherApiKey,
           units: 'metric'
+        },
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'AI-Smart-City-App/1.0'
         }
       });
 

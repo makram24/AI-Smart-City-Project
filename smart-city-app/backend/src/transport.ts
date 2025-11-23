@@ -42,9 +42,24 @@ export interface TransportRoutePlan {
 export class PublicTransportService {
   private bkkApiUrl = 'https://futar.bkk.hu/api/query/v1/ws/otp/api/where';
   private userAgent = 'AI-Smart-City-App/1.0';
+  private useRealApi = process.env.BKK_API_ENABLED === 'true' || false;
+  private apiKey = process.env.BKK_API_KEY || '';
 
   // Get nearby transport stops
   async getNearbyStops(lat: number, lng: number, radius: number = 500): Promise<TransportStop[]> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const realStops = await this.fetchRealNearbyStops(lat, lng, radius);
+        if (realStops && realStops.length > 0) {
+          return realStops;
+        }
+      } catch (error) {
+        console.warn('BKK API failed, falling back to mock data:', error);
+      }
+    }
+
+    // Fallback to mock data
     try {
       // Mock data for Budapest transport stops
       const mockStops: TransportStop[] = [
@@ -119,8 +134,70 @@ export class PublicTransportService {
     }
   }
 
+  // Fetch real nearby stops from BKK API
+  private async fetchRealNearbyStops(lat: number, lng: number, radius: number): Promise<TransportStop[]> {
+    try {
+      // BKK FUTÁR API endpoint for stops
+      const response = await axios.get(`${this.bkkApiUrl}/stops-for-location`, {
+        params: {
+          lat,
+          lon: lng,
+          radius: radius,
+          key: this.apiKey
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      if (response.data && response.data.data && response.data.data.list) {
+        return response.data.data.list.map((stop: any) => ({
+          id: stop.id || `stop_${stop.stopId}`,
+          name: stop.name || stop.stopName || 'Unknown Stop',
+          position: [stop.lat || stop.lat, stop.lon || stop.lon],
+          type: this.mapStopType(stop.routeType || stop.type),
+          routes: stop.routes ? stop.routes.map((r: any) => r.shortName || r.name) : []
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching real BKK stops:', error);
+      throw error;
+    }
+  }
+
+  // Map BKK stop type to our type
+  private mapStopType(bkkType: string | number): 'bus' | 'tram' | 'metro' | 'trolley' {
+    const typeMap: { [key: string]: 'bus' | 'tram' | 'metro' | 'trolley' } = {
+      '0': 'tram',
+      '1': 'metro',
+      '3': 'bus',
+      '11': 'trolley',
+      'tram': 'tram',
+      'metro': 'metro',
+      'bus': 'bus',
+      'trolley': 'trolley'
+    };
+    return typeMap[String(bkkType)] || 'bus';
+  }
+
   // Get real-time arrivals for a stop
   async getStopArrivals(stopId: string): Promise<ArrivalInfo[]> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const realArrivals = await this.fetchRealArrivals(stopId);
+        if (realArrivals && realArrivals.length > 0) {
+          return realArrivals;
+        }
+      } catch (error) {
+        console.warn('BKK arrivals API failed, falling back to mock data:', error);
+      }
+    }
+
+    // Fallback to mock data
     try {
       // Mock real-time data
       const mockArrivals: ArrivalInfo[] = [
@@ -161,8 +238,63 @@ export class PublicTransportService {
     }
   }
 
+  // Fetch real arrivals from BKK API
+  private async fetchRealArrivals(stopId: string): Promise<ArrivalInfo[]> {
+    try {
+      const response = await axios.get(`${this.bkkApiUrl}/arrivals-and-departures-for-stop`, {
+        params: {
+          stopId: stopId.replace('stop_', ''),
+          key: this.apiKey,
+          minutesBefore: 0,
+          minutesAfter: 30
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      if (response.data && response.data.data && response.data.data.entry) {
+        const arrivals = response.data.data.entry.arrivalsAndDepartures || [];
+        return arrivals.map((arrival: any) => {
+          const route = arrival.routeShortName || arrival.routeId || 'Unknown';
+          const predictedTime = arrival.predictedArrivalTime || arrival.scheduledArrivalTime;
+          const scheduledTime = arrival.scheduledArrivalTime;
+          const delay = predictedTime && scheduledTime ? Math.round((predictedTime - scheduledTime) / 1000 / 60) : 0;
+          const minutesUntil = predictedTime ? Math.round((predictedTime - Date.now()) / 1000 / 60) : 0;
+
+          return {
+            route: route,
+            destination: arrival.tripHeadsign || arrival.headsign || 'Unknown',
+            arrivalTime: minutesUntil > 0 ? `${minutesUntil} min` : 'Arriving',
+            delay: delay > 0 ? delay : undefined,
+            vehicleType: this.mapStopType(arrival.routeType || arrival.route?.type)
+          };
+        }).slice(0, 10); // Limit to 10 arrivals
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching real BKK arrivals:', error);
+      throw error;
+    }
+  }
+
   // Plan a journey using public transport
   async planJourney(from: [number, number], to: [number, number]): Promise<TransportRoutePlan | null> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const realJourney = await this.fetchRealJourney(from, to);
+        if (realJourney) {
+          return realJourney;
+        }
+      } catch (error) {
+        console.warn('BKK journey planning API failed, falling back to mock data:', error);
+      }
+    }
+
+    // Fallback to mock data
     try {
       // Mock journey planning
       const mockJourney: TransportRoutePlan = {
@@ -199,6 +331,55 @@ export class PublicTransportService {
     } catch (error) {
       console.error('Error planning journey:', error);
       return null;
+    }
+  }
+
+  // Fetch real journey plan from BKK API
+  private async fetchRealJourney(from: [number, number], to: [number, number]): Promise<TransportRoutePlan | null> {
+    try {
+      const response = await axios.get(`${this.bkkApiUrl}/plan-trip`, {
+        params: {
+          fromPlace: `${from[0]},${from[1]}`,
+          toPlace: `${to[0]},${to[1]}`,
+          key: this.apiKey,
+          mode: 'TRANSIT,WALK',
+          arriveBy: false,
+          numItineraries: 1
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      if (response.data && response.data.data && response.data.data.plan) {
+        const plan = response.data.data.plan;
+        const itinerary = plan.itineraries?.[0];
+        
+        if (itinerary) {
+          const steps = itinerary.legs.map((leg: any) => ({
+            type: leg.mode === 'WALK' ? 'walk' : leg.mode.toLowerCase(),
+            route: leg.route?.shortName || leg.route?.longName,
+            from: leg.from?.name || 'Unknown',
+            to: leg.to?.name || 'Unknown',
+            duration: Math.round(leg.duration / 60), // Convert seconds to minutes
+            distance: leg.distance ? Math.round(leg.distance) : undefined
+          }));
+
+          return {
+            from: itinerary.legs[0]?.from?.name || 'Starting point',
+            to: itinerary.legs[itinerary.legs.length - 1]?.to?.name || 'Destination',
+            duration: Math.round(itinerary.duration / 60),
+            transfers: itinerary.transfers || 0,
+            steps
+          };
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching real BKK journey:', error);
+      throw error;
     }
   }
 

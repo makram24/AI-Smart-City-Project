@@ -29,9 +29,23 @@ export interface BikeAvailability {
 export class SharedMobilityService {
   private molBubiApiUrl = 'https://api.molbubi.hu/api/stations';
   private userAgent = 'AI-Smart-City-App/1.0';
+  private useRealApi = process.env.MOL_BUBI_API_ENABLED === 'true' || false;
 
   // Get all bike stations
   async getAllBikeStations(): Promise<BikeStation[]> {
+    // Try real API first if enabled
+    if (this.useRealApi) {
+      try {
+        const realStations = await this.fetchRealBikeStations();
+        if (realStations && realStations.length > 0) {
+          return realStations;
+        }
+      } catch (error) {
+        console.warn('MOL Bubi API failed, falling back to mock data:', error);
+      }
+    }
+
+    // Fallback to mock data
     try {
       // Mock MOL Bubi data for Budapest
       const mockStations: BikeStation[] = [
@@ -124,6 +138,63 @@ export class SharedMobilityService {
     }
   }
 
+  // Fetch real bike stations from MOL Bubi API
+  private async fetchRealBikeStations(): Promise<BikeStation[]> {
+    try {
+      const response = await axios.get(this.molBubiApiUrl, {
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      if (response.data && Array.isArray(response.data)) {
+        return response.data.map((station: any) => ({
+          id: station.id || station.stationId || `station_${station.number}`,
+          name: station.name || station.stationName || 'Unknown Station',
+          position: [station.lat || station.latitude, station.lng || station.longitude],
+          availableBikes: station.availableBikes || station.bikesAvailable || 0,
+          availableDocks: station.availableDocks || station.docksAvailable || 0,
+          totalDocks: station.totalDocks || station.capacity || 20,
+          status: this.mapStationStatus(station.status || station.isActive),
+          lastUpdated: station.lastUpdated || new Date().toISOString()
+        }));
+      } else if (response.data && response.data.stations) {
+        // Handle nested response structure
+        return response.data.stations.map((station: any) => ({
+          id: station.id || station.stationId || `station_${station.number}`,
+          name: station.name || station.stationName || 'Unknown Station',
+          position: [station.lat || station.latitude, station.lng || station.longitude],
+          availableBikes: station.availableBikes || station.bikesAvailable || 0,
+          availableDocks: station.availableDocks || station.docksAvailable || 0,
+          totalDocks: station.totalDocks || station.capacity || 20,
+          status: this.mapStationStatus(station.status || station.isActive),
+          lastUpdated: station.lastUpdated || new Date().toISOString()
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching real MOL Bubi stations:', error);
+      throw error;
+    }
+  }
+
+  // Map API status to our status type
+  private mapStationStatus(status: any): 'active' | 'inactive' | 'maintenance' {
+    if (typeof status === 'boolean') {
+      return status ? 'active' : 'inactive';
+    }
+    const statusStr = String(status).toLowerCase();
+    if (statusStr.includes('active') || statusStr === 'true' || statusStr === '1') {
+      return 'active';
+    }
+    if (statusStr.includes('maintenance') || statusStr.includes('repair')) {
+      return 'maintenance';
+    }
+    return 'inactive';
+  }
+
   // Get nearby bike stations
   async getNearbyBikeStations(lat: number, lng: number, radius: number = 1000): Promise<BikeAvailability[]> {
     try {
@@ -153,6 +224,20 @@ export class SharedMobilityService {
 
   // Get bike route between two points
   async getBikeRoute(from: [number, number], to: [number, number]): Promise<BikeRoute | null> {
+    // Try OpenRouteService if available
+    const openRouteApiKey = process.env.OPENROUTESERVICE_API_KEY;
+    if (openRouteApiKey) {
+      try {
+        const realRoute = await this.fetchRealBikeRoute(from, to, openRouteApiKey);
+        if (realRoute) {
+          return realRoute;
+        }
+      } catch (error) {
+        console.warn('OpenRouteService failed, falling back to simple calculation:', error);
+      }
+    }
+
+    // Fallback to simple calculation
     try {
       const distance = this.calculateDistance(from[0], from[1], to[0], to[1]);
       const duration = Math.round(distance / 4); // Assume 4 m/s average bike speed
@@ -178,6 +263,57 @@ export class SharedMobilityService {
     } catch (error) {
       console.error('Error calculating bike route:', error);
       return null;
+    }
+  }
+
+  // Fetch real bike route from OpenRouteService
+  private async fetchRealBikeRoute(from: [number, number], to: [number, number], apiKey: string): Promise<BikeRoute | null> {
+    try {
+      const response = await axios.post(
+        'https://api.openrouteservice.org/v2/directions/cycling-regular',
+        {
+          coordinates: [[from[1], from[0]], [to[1], to[0]]], // [lng, lat] format
+          profile: 'cycling-regular',
+          format: 'json'
+        },
+        {
+          headers: {
+            'Authorization': apiKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+
+      if (response.data && response.data.routes && response.data.routes.length > 0) {
+        const route = response.data.routes[0];
+        const geometry = route.geometry?.coordinates || [];
+        const segments = route.segments || [];
+        
+        const instructions: string[] = [];
+        segments.forEach((segment: any) => {
+          segment.steps?.forEach((step: any) => {
+            if (step.instruction) {
+              instructions.push(step.instruction);
+            }
+          });
+        });
+
+        return {
+          distance: Math.round(route.summary?.distance || 0),
+          duration: Math.round(route.summary?.duration || 0),
+          geometry: geometry.map((coord: number[]) => [coord[1], coord[0]]), // Convert to [lat, lng]
+          instructions: instructions.length > 0 ? instructions : [
+            'Start cycling from starting point',
+            'Follow the route',
+            'Arrive at destination'
+          ]
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching real bike route:', error);
+      throw error;
     }
   }
 
