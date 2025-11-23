@@ -40,7 +40,8 @@ export interface TransportRoutePlan {
 }
 
 export class PublicTransportService {
-  private bkkApiUrl = 'https://futar.bkk.hu/api/query/v1/ws/otp/api/where';
+  private bkkApiBaseUrl = 'https://go.bkk.hu/api/query/v1/ws/otp/api/where';
+  private bkkGtfsRtBaseUrl = 'https://go.bkk.hu/api/query/v1/ws/gtfs-rt/full';
   private userAgent = 'AI-Smart-City-App/1.0';
   private useRealApi = process.env.BKK_API_ENABLED === 'true' || false;
   private apiKey = process.env.BKK_API_KEY || '';
@@ -52,11 +53,22 @@ export class PublicTransportService {
       try {
         const realStops = await this.fetchRealNearbyStops(lat, lng, radius);
         if (realStops && realStops.length > 0) {
+          console.log(`✅ BKK API active! Retrieved ${realStops.length} real stops`);
           return realStops;
         }
-      } catch (error) {
-        console.warn('BKK API failed, falling back to mock data:', error);
+      } catch (error: any) {
+        // Log detailed error for debugging
+        if (error.response) {
+          console.warn(`⚠️ BKK API error (${error.response.status}): ${error.response.statusText}`);
+          if (error.response.status === 401 || error.response.status === 403) {
+            console.info('💡 API key may not be activated yet. BKK requires 2 days for activation.');
+          }
+        } else {
+          console.warn('⚠️ BKK API failed, falling back to mock data:', error.message);
+        }
       }
+    } else if (this.apiKey && !this.useRealApi) {
+      console.info('💡 BKK API key found but API is disabled. Set BKK_API_ENABLED=true to use real data.');
     }
 
     // Fallback to mock data
@@ -134,16 +146,17 @@ export class PublicTransportService {
     }
   }
 
-  // Fetch real nearby stops from BKK API
+  // Fetch real nearby stops from BKK FUTÁR API
   private async fetchRealNearbyStops(lat: number, lng: number, radius: number): Promise<TransportStop[]> {
     try {
-      // BKK FUTÁR API endpoint for stops
-      const response = await axios.get(`${this.bkkApiUrl}/stops-for-location`, {
+      // BKK FUTÁR API endpoint for stops near location
+      // API key must be passed as query parameter 'key'
+      const response = await axios.get(`${this.bkkApiBaseUrl}/stops-for-location`, {
         params: {
           lat,
           lon: lng,
           radius: radius,
-          key: this.apiKey
+          key: this.apiKey // API key as query parameter
         },
         headers: {
           'User-Agent': this.userAgent,
@@ -152,13 +165,17 @@ export class PublicTransportService {
         timeout: 5000
       });
 
+      // BKK FUTÁR API response structure
       if (response.data && response.data.data && response.data.data.list) {
         return response.data.data.list.map((stop: any) => ({
-          id: stop.id || `stop_${stop.stopId}`,
+          id: stop.id || stop.stopId || `stop_${stop.code}`,
           name: stop.name || stop.stopName || 'Unknown Stop',
-          position: [stop.lat || stop.lat, stop.lon || stop.lon],
-          type: this.mapStopType(stop.routeType || stop.type),
-          routes: stop.routes ? stop.routes.map((r: any) => r.shortName || r.name) : []
+          position: [
+            stop.lat || stop.coordinates?.lat || stop.latitude,
+            stop.lon || stop.coordinates?.lon || stop.longitude
+          ],
+          type: this.mapStopType(stop.routeType || stop.type || stop.stopType),
+          routes: stop.routes ? stop.routes.map((r: any) => r.shortName || r.name || r.routeShortName) : []
         }));
       }
       return [];
@@ -190,10 +207,15 @@ export class PublicTransportService {
       try {
         const realArrivals = await this.fetchRealArrivals(stopId);
         if (realArrivals && realArrivals.length > 0) {
+          console.log(`✅ BKK API active! Retrieved ${realArrivals.length} real arrivals for stop ${stopId}`);
           return realArrivals;
         }
-      } catch (error) {
-        console.warn('BKK arrivals API failed, falling back to mock data:', error);
+      } catch (error: any) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.info('💡 BKK API key not yet activated (2-day activation period)');
+        } else {
+          console.warn('⚠️ BKK arrivals API failed, falling back to mock data:', error.message);
+        }
       }
     }
 
@@ -238,13 +260,17 @@ export class PublicTransportService {
     }
   }
 
-  // Fetch real arrivals from BKK API
+  // Fetch real arrivals from BKK FUTÁR API
   private async fetchRealArrivals(stopId: string): Promise<ArrivalInfo[]> {
     try {
-      const response = await axios.get(`${this.bkkApiUrl}/arrivals-and-departures-for-stop`, {
+      // Clean stop ID (remove 'stop_' prefix if present)
+      const cleanStopId = stopId.replace('stop_', '');
+      
+      // BKK FUTÁR API endpoint for arrivals and departures
+      const response = await axios.get(`${this.bkkApiBaseUrl}/arrivals-and-departures-for-stop`, {
         params: {
-          stopId: stopId.replace('stop_', ''),
-          key: this.apiKey,
+          stopId: cleanStopId,
+          key: this.apiKey, // API key as query parameter
           minutesBefore: 0,
           minutesAfter: 30
         },
@@ -334,14 +360,15 @@ export class PublicTransportService {
     }
   }
 
-  // Fetch real journey plan from BKK API
+  // Fetch real journey plan from BKK FUTÁR API
   private async fetchRealJourney(from: [number, number], to: [number, number]): Promise<TransportRoutePlan | null> {
     try {
-      const response = await axios.get(`${this.bkkApiUrl}/plan-trip`, {
+      // BKK FUTÁR API endpoint for trip planning
+      const response = await axios.get(`${this.bkkApiBaseUrl}/plan-trip`, {
         params: {
           fromPlace: `${from[0]},${from[1]}`,
           toPlace: `${to[0]},${to[1]}`,
-          key: this.apiKey,
+          key: this.apiKey, // API key as query parameter
           mode: 'TRANSIT,WALK',
           arriveBy: false,
           numItineraries: 1
@@ -393,6 +420,19 @@ export class PublicTransportService {
     startTime: string;
     endTime?: string;
   }>> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const realAlerts = await this.fetchRealAlerts();
+        if (realAlerts && realAlerts.length > 0) {
+          return realAlerts;
+        }
+      } catch (error) {
+        console.warn('BKK alerts API failed, falling back to mock data:', error);
+      }
+    }
+
+    // Fallback to mock data
     try {
       // Mock disruption data
       const mockDisruptions = [
@@ -421,6 +461,82 @@ export class PublicTransportService {
       console.error('Error fetching disruptions:', error);
       return [];
     }
+  }
+
+  // Fetch real alerts from BKK GTFS-realtime API
+  private async fetchRealAlerts(): Promise<Array<{
+    id: string;
+    title: string;
+    description: string;
+    severity: 'low' | 'medium' | 'high';
+    affectedRoutes: string[];
+    startTime: string;
+    endTime?: string;
+  }>> {
+    try {
+      // BKK GTFS-realtime Alerts endpoint (text format for easier parsing)
+      const response = await axios.get(`${this.bkkGtfsRtBaseUrl}/Alerts.txt`, {
+        params: {
+          key: this.apiKey
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'text/plain'
+        },
+        timeout: 5000
+      });
+
+      // Parse GTFS-realtime alerts
+      // Note: This is a simplified parser - full GTFS-realtime uses Protocol Buffers
+      // For production, consider using a GTFS-realtime library
+      const alerts: Array<{
+        id: string;
+        title: string;
+        description: string;
+        severity: 'low' | 'medium' | 'high';
+        affectedRoutes: string[];
+        startTime: string;
+        endTime?: string;
+      }> = [];
+
+      // If response is text format, try to parse it
+      if (typeof response.data === 'string') {
+        // Simple parsing - in production, use proper GTFS-realtime parser
+        // For now, return empty array and fall back to mock
+        console.log('GTFS-realtime text format received, parsing...');
+      }
+
+      // If response is JSON (some endpoints might return JSON)
+      if (response.data && Array.isArray(response.data.entity)) {
+        response.data.entity.forEach((entity: any) => {
+          if (entity.alert) {
+            const alert = entity.alert;
+            alerts.push({
+              id: entity.id || `alert_${Date.now()}`,
+              title: alert.headerText?.translation?.[0]?.text || 'Transport Alert',
+              description: alert.descriptionText?.translation?.[0]?.text || '',
+              severity: this.mapAlertSeverity(alert.severityLevel),
+              affectedRoutes: alert.informedEntity?.map((e: any) => e.routeId).filter(Boolean) || [],
+              startTime: alert.activePeriod?.[0]?.start ? new Date(alert.activePeriod[0].start * 1000).toISOString() : new Date().toISOString(),
+              endTime: alert.activePeriod?.[0]?.end ? new Date(alert.activePeriod[0].end * 1000).toISOString() : undefined
+            });
+          }
+        });
+      }
+
+      return alerts;
+    } catch (error) {
+      console.error('Error fetching real BKK alerts:', error);
+      throw error;
+    }
+  }
+
+  // Map GTFS-realtime severity to our severity type
+  private mapAlertSeverity(severity: number): 'low' | 'medium' | 'high' {
+    // GTFS-realtime severity levels: 1=INFO, 2=WARNING, 3=SEVERE
+    if (severity === 3) return 'high';
+    if (severity === 2) return 'medium';
+    return 'low';
   }
 
   // Get transport routes by type

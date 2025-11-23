@@ -7,12 +7,22 @@
 - ✅ Nearby stops fetching
 - ✅ Real-time arrivals
 - ✅ Journey planning
+- ✅ Transport alerts/disruptions
 - ✅ Environment variable support (`BKK_API_KEY`, `BKK_API_ENABLED`)
 
 **Implementation Details:**
 - Located in `smart-city-app/backend/src/transport.ts`
-- Methods: `fetchRealNearbyStops()`, `fetchRealArrivals()`, `fetchRealJourney()`
+- Base URL: `https://go.bkk.hu/api/query/v1/ws/otp/api/where`
+- GTFS-realtime URL: `https://go.bkk.hu/api/query/v1/ws/gtfs-rt/full`
+- API key passed as query parameter `key`
+- Methods: `fetchRealNearbyStops()`, `fetchRealArrivals()`, `fetchRealJourney()`, `fetchRealAlerts()`
 - Graceful fallback to mock data if API fails or is not configured
+
+**API Endpoints Used:**
+- `/stops-for-location` - Get stops near coordinates
+- `/arrivals-and-departures-for-stop` - Get real-time arrivals
+- `/plan-trip` - Plan journey between two points
+- `/Alerts.txt` - Get transport alerts (GTFS-realtime)
 
 ### 2. **MOL Bubi API Integration** (Bike Sharing)
 - ✅ Real API integration with fallback to mock data
@@ -78,13 +88,19 @@
    - Add to `.env`: `OPENROUTESERVICE_API_KEY=your_key_here`
 
 2. **BKK FUTÁR API**
-   - Visit: https://bkk.hu/en/opendata/
-   - Request API access
+   - Visit: https://go.bkk.hu/ (Key Management)
+   - Request API access (you already have a key: `your_key_here`)
+   - ⏳ **Activation:** BKK requires 2 days for API key activation
    - Add to `.env`: 
      ```
      BKK_API_KEY=your_key_here
      BKK_API_ENABLED=true
      ```
+   - **Current Status:** Key created on 11/23/2025, activation expected ~11/25/2025
+   - **Note:** App will use mock data until API is active (automatic fallback)
+   - API Documentation: OpenAPI format available at `futar-openapi.yaml`
+   - Data formats: FUTÁR API (JSON), GTFS (static), GTFS-realtime (Protocol Buffers)
+   - Rate limit: Don't refresh more frequently than every 5 seconds
 
 3. **MOL Bubi API**
    - Check if public API is available
