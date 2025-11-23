@@ -38,29 +38,28 @@ OPENROUTESERVICE_API_KEY=your_key_here
 
 ---
 
-### 3. **OpenWeatherMap** (Weather Data)
-**Priority:** MEDIUM - Nice to have for weather-aware recommendations
+### 3. **Weather API** (Weather Data)
+**Priority:** ✅ DONE - Using Open-Meteo (FREE, no API key needed!)
 
 **What it does:**
 - Current weather conditions
 - 5-day forecast
-- Weather alerts
 - Weather context for route recommendations (e.g., "too rainy for cycling")
 
-**How to get:**
+**Status:** ✅ **Already implemented!**
+- Using **Open-Meteo** (100% free, no API key needed)
+- Unlimited requests
+- Works immediately
+- No signup required
+
+**Optional:** If you want to use OpenWeatherMap instead:
 1. Visit: https://openweathermap.org/api
-2. Click "Sign Up" (top right)
-3. Create free account
-4. Go to "API keys" tab
-5. Copy your API key
-6. **Free tier:** 1,000 calls/day, 60 calls/minute
+2. Sign up (free)
+3. Get API key
+4. Add to `.env`: `OPENWEATHER_API_KEY=your_key_here`
+5. The app will automatically use OpenWeatherMap if key is provided
 
-**Add to `.env`:**
-```env
-OPENWEATHER_API_KEY=your_key_here
-```
-
-**Time to get:** ~5 minutes
+**Current setup:** Open-Meteo (no action needed!)
 
 ---
 
@@ -117,7 +116,7 @@ MOL_BUBI_API_ENABLED=true
 
 ### Essential (Get These Now):
 - [ ] **OpenRouteService** - Get free API key (~5 min)
-- [ ] **OpenWeatherMap** - Get free API key (~5 min)
+- [x] **Weather API** - ✅ DONE! Using Open-Meteo (no key needed)
 
 ### Already Have:
 - [x] **BKK FUTÁR** - Key created, waiting for activation
@@ -139,14 +138,11 @@ MOL_BUBI_API_ENABLED=true
    OPENROUTESERVICE_API_KEY=paste_your_key_here
    ```
 
-### Step 2: Get OpenWeatherMap Key
-1. Go to https://openweathermap.org/api
-2. Sign up (free)
-3. Copy API key
-4. Add to `smart-city-app/backend/.env`:
-   ```env
-   OPENWEATHER_API_KEY=paste_your_key_here
-   ```
+### Step 2: Weather API ✅ DONE!
+- **No action needed!** The app now uses Open-Meteo automatically
+- It's 100% free, no API key required
+- Works immediately without any setup
+- If you prefer OpenWeatherMap, you can add `OPENWEATHER_API_KEY` to `.env` (optional)
 
 ### Step 3: Update .env File
 Your complete `.env` should look like:
@@ -156,7 +152,7 @@ NODE_ENV=development
 
 # API Keys
 OPENROUTESERVICE_API_KEY=your_openrouteservice_key
-OPENWEATHER_API_KEY=your_openweather_key
+# OPENWEATHER_API_KEY=your_openweather_key (optional - Open-Meteo used by default)
 
 # BKK FUTÁR API (already have)
 BKK_API_KEY=your_key_here
@@ -181,7 +177,7 @@ npm run dev
 |-----|------|-----------|
 | **BKK FUTÁR** | Free | Unlimited |
 | **OpenRouteService** | Free | 2,000 req/day |
-| **OpenWeatherMap** | Free | 1,000 req/day |
+| **Weather (Open-Meteo)** | Free | Unlimited ✅ |
 | **OpenAI** | Paid | ~$0.002/1K tokens |
 | **MOL Bubi** | Unknown | Unknown |
 
@@ -196,10 +192,11 @@ npm run dev
    - Free, quick to get
    - Makes a big difference in user experience
 
-2. **OpenWeatherMap** ⭐⭐ (MEDIUM)
-   - Nice weather features
-   - Free, quick to get
-   - Enhances route recommendations
+2. **Weather API** ⭐⭐⭐ (HIGH) ✅ DONE!
+   - ✅ Using Open-Meteo (free, no key needed)
+   - ✅ Already implemented
+   - ✅ Works immediately
+   - ✅ Enhances route recommendations
 
 3. **BKK FUTÁR** ⭐⭐⭐ (HIGH)
    - Already have, just waiting

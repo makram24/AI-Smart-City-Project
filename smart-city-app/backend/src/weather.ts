@@ -37,27 +37,79 @@ export interface WeatherAlerts {
 
 export class WeatherService {
   private openWeatherApiKey: string;
-  private baseUrl = 'https://api.openweathermap.org/data/2.5';
+  private openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
+  private openWeatherBaseUrl = 'https://api.openweathermap.org/data/2.5';
   private budapestCoords = { lat: 47.4979, lng: 19.0402 };
+  private useOpenMeteo = true; // Use Open-Meteo by default (no API key needed)
 
   constructor(apiKey?: string) {
     this.openWeatherApiKey = apiKey || process.env.OPENWEATHER_API_KEY || '';
+    // Prefer Open-Meteo (free, no key needed) unless OpenWeatherMap key is explicitly provided
+    this.useOpenMeteo = !this.openWeatherApiKey;
   }
 
   // Get current weather for Budapest
   async getCurrentWeather(): Promise<WeatherData | null> {
-    try {
-      if (!this.openWeatherApiKey) {
-        // Return mock data if no API key
-        return this.getMockWeatherData();
+    // Try Open-Meteo first (free, no API key needed)
+    if (this.useOpenMeteo) {
+      try {
+        const weather = await this.fetchOpenMeteoCurrent();
+        if (weather) {
+          console.log('✅ Using Open-Meteo weather API (free, no key needed)');
+          return weather;
+        }
+      } catch (error) {
+        console.warn('Open-Meteo failed, trying OpenWeatherMap:', error);
       }
+    }
 
-      const response = await axios.get(`${this.baseUrl}/weather`, {
+    // Fallback to OpenWeatherMap if API key is provided
+    if (this.openWeatherApiKey) {
+      try {
+        const response = await axios.get(`${this.openWeatherBaseUrl}/weather`, {
+          params: {
+            lat: this.budapestCoords.lat,
+            lon: this.budapestCoords.lng,
+            appid: this.openWeatherApiKey,
+            units: 'metric'
+          },
+          timeout: 5000,
+          headers: {
+            'User-Agent': 'AI-Smart-City-App/1.0'
+          }
+        });
+
+        const data = response.data;
+        return {
+          temperature: Math.round(data.main.temp),
+          feelsLike: Math.round(data.main.feels_like),
+          humidity: data.main.humidity,
+          pressure: data.main.pressure,
+          visibility: data.visibility / 1000, // Convert to km
+          windSpeed: data.wind.speed,
+          windDirection: data.wind.deg,
+          description: data.weather[0].description,
+          icon: data.weather[0].icon,
+          timestamp: new Date().toISOString()
+        };
+      } catch (error) {
+        console.error('Error fetching OpenWeatherMap:', error);
+      }
+    }
+
+    // Final fallback to mock data
+    return this.getMockWeatherData();
+  }
+
+  // Fetch current weather from Open-Meteo (free, no API key)
+  private async fetchOpenMeteoCurrent(): Promise<WeatherData | null> {
+    try {
+      const response = await axios.get(this.openMeteoBaseUrl, {
         params: {
-          lat: this.budapestCoords.lat,
-          lon: this.budapestCoords.lng,
-          appid: this.openWeatherApiKey,
-          units: 'metric'
+          latitude: this.budapestCoords.lat,
+          longitude: this.budapestCoords.lng,
+          current: 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,pressure_msl',
+          timezone: 'Europe/Budapest'
         },
         timeout: 5000,
         headers: {
@@ -66,43 +118,57 @@ export class WeatherService {
       });
 
       const data = response.data;
-      return {
-        temperature: Math.round(data.main.temp),
-        feelsLike: Math.round(data.main.feels_like),
-        humidity: data.main.humidity,
-        pressure: data.main.pressure,
-        visibility: data.visibility / 1000, // Convert to km
-        windSpeed: data.wind.speed,
-        windDirection: data.wind.deg,
-        description: data.weather[0].description,
-        icon: data.weather[0].icon,
-        timestamp: new Date().toISOString()
-      };
+      if (data.current) {
+        const current = data.current;
+        return {
+          temperature: Math.round(current.temperature_2m),
+          feelsLike: Math.round(current.temperature_2m), // Open-Meteo doesn't have feels_like, use same temp
+          humidity: current.relative_humidity_2m,
+          pressure: Math.round(current.pressure_msl),
+          visibility: 10, // Open-Meteo doesn't provide visibility in free tier
+          windSpeed: current.wind_speed_10m,
+          windDirection: current.wind_direction_10m,
+          description: this.mapWeatherCode(current.weather_code),
+          icon: this.mapWeatherCodeToIcon(current.weather_code),
+          timestamp: new Date().toISOString()
+        };
+      }
+      return null;
     } catch (error) {
-      console.error('Error fetching current weather:', error);
-      return this.getMockWeatherData();
+      console.error('Error fetching Open-Meteo weather:', error);
+      throw error;
     }
   }
 
   // Get 5-day weather forecast
   async getWeatherForecast(): Promise<WeatherForecast[]> {
-    try {
-      if (!this.openWeatherApiKey) {
-        return this.getMockForecast();
-      }
-
-      const response = await axios.get(`${this.baseUrl}/forecast`, {
-        params: {
-          lat: this.budapestCoords.lat,
-          lon: this.budapestCoords.lng,
-          appid: this.openWeatherApiKey,
-          units: 'metric'
-        },
-        timeout: 5000,
-        headers: {
-          'User-Agent': 'AI-Smart-City-App/1.0'
+    // Try Open-Meteo first (free, no API key needed)
+    if (this.useOpenMeteo) {
+      try {
+        const forecast = await this.fetchOpenMeteoForecast();
+        if (forecast && forecast.length > 0) {
+          return forecast;
         }
-      });
+      } catch (error) {
+        console.warn('Open-Meteo forecast failed, trying OpenWeatherMap:', error);
+      }
+    }
+
+    // Fallback to OpenWeatherMap if API key is provided
+    if (this.openWeatherApiKey) {
+      try {
+        const response = await axios.get(`${this.openWeatherBaseUrl}/forecast`, {
+          params: {
+            lat: this.budapestCoords.lat,
+            lon: this.budapestCoords.lng,
+            appid: this.openWeatherApiKey,
+            units: 'metric'
+          },
+          timeout: 5000,
+          headers: {
+            'User-Agent': 'AI-Smart-City-App/1.0'
+          }
+        });
 
       // Process forecast data to get daily summaries
       const dailyForecasts: { [key: string]: any } = {};
@@ -144,6 +210,102 @@ export class WeatherService {
       console.error('Error fetching weather forecast:', error);
       return this.getMockForecast();
     }
+  }
+
+  // Fetch forecast from Open-Meteo (free, no API key)
+  private async fetchOpenMeteoForecast(): Promise<WeatherForecast[]> {
+    try {
+      const response = await axios.get(this.openMeteoBaseUrl, {
+        params: {
+          latitude: this.budapestCoords.lat,
+          longitude: this.budapestCoords.lng,
+          daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max',
+          timezone: 'Europe/Budapest',
+          forecast_days: 5
+        },
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'AI-Smart-City-App/1.0'
+        }
+      });
+
+      const data = response.data;
+      if (data.daily) {
+        const daily = data.daily;
+        const forecasts: WeatherForecast[] = [];
+        
+        for (let i = 0; i < Math.min(5, daily.time.length); i++) {
+          forecasts.push({
+            date: daily.time[i],
+            temperature: {
+              min: Math.round(daily.temperature_2m_min[i]),
+              max: Math.round(daily.temperature_2m_max[i])
+            },
+            description: this.mapWeatherCode(daily.weather_code[i]),
+            icon: this.mapWeatherCodeToIcon(daily.weather_code[i]),
+            precipitation: Math.round(daily.precipitation_sum[i] || 0),
+            windSpeed: Math.round(daily.wind_speed_10m_max[i] || 0)
+          });
+        }
+        
+        return forecasts;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching Open-Meteo forecast:', error);
+      throw error;
+    }
+  }
+
+  // Map WMO weather code to description
+  private mapWeatherCode(code: number): string {
+    // WMO Weather interpretation codes (WW)
+    const weatherMap: { [key: number]: string } = {
+      0: 'clear sky',
+      1: 'mainly clear',
+      2: 'partly cloudy',
+      3: 'overcast',
+      45: 'foggy',
+      48: 'depositing rime fog',
+      51: 'light drizzle',
+      53: 'moderate drizzle',
+      55: 'dense drizzle',
+      56: 'light freezing drizzle',
+      57: 'dense freezing drizzle',
+      61: 'slight rain',
+      63: 'moderate rain',
+      65: 'heavy rain',
+      66: 'light freezing rain',
+      67: 'heavy freezing rain',
+      71: 'slight snow fall',
+      73: 'moderate snow fall',
+      75: 'heavy snow fall',
+      77: 'snow grains',
+      80: 'slight rain showers',
+      81: 'moderate rain showers',
+      82: 'violent rain showers',
+      85: 'slight snow showers',
+      86: 'heavy snow showers',
+      95: 'thunderstorm',
+      96: 'thunderstorm with slight hail',
+      99: 'thunderstorm with heavy hail'
+    };
+    return weatherMap[code] || 'unknown';
+  }
+
+  // Map WMO weather code to icon (compatible with OpenWeatherMap icons)
+  private mapWeatherCodeToIcon(code: number): string {
+    // Map to OpenWeatherMap-style icons for consistency
+    if (code === 0 || code === 1) return '01d'; // clear sky
+    if (code === 2) return '02d'; // partly cloudy
+    if (code === 3) return '04d'; // overcast
+    if (code >= 45 && code <= 48) return '50d'; // fog
+    if (code >= 51 && code <= 67) return '09d'; // rain
+    if (code >= 71 && code <= 77) return '13d'; // snow
+    if (code >= 80 && code <= 82) return '09d'; // rain showers
+    if (code >= 85 && code <= 86) return '13d'; // snow showers
+    if (code >= 95 && code <= 99) return '11d'; // thunderstorm
+    return '02d'; // default
   }
 
   // Get weather alerts
