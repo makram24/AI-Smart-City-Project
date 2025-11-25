@@ -11,30 +11,29 @@
 
 ---
 
-## 🔴 Required APIs (Need to Get)
+## ✅ Already Have (Just Need to Configure)
 
 ### 2. **OpenRouteService** (Advanced Routing)
 **Priority:** HIGH - Needed for real routing (walking, cycling, driving)
+**Status:** ✅ API Key Obtained!
 
 **What it does:**
 - Real turn-by-turn directions
 - Route geometry for map visualization
 - Multiple transport modes (walking, cycling, driving)
-- Currently using simple distance calculation as fallback
+- According to [openrouteservice.org](https://openrouteservice.org/), you get:
+  - Walking, cycling, driving routes
+  - Up to 2,000 requests/day (free tier)
+  - Isochrones (500/day free)
+  - Time-distance matrices
+  - And more!
 
-**How to get:**
-1. Visit: https://openrouteservice.org/
-2. Click "Sign Up" or "Get API Key"
-3. Create free account
-4. Get your API key from dashboard
-5. **Free tier:** 2,000 requests/day (plenty for development)
-
-**Add to `.env`:**
+**Next Step - Add to `.env`:**
 ```env
-OPENROUTESERVICE_API_KEY=your_key_here
+OPENROUTESERVICE_API_KEY=your_actual_api_key_here
 ```
 
-**Time to get:** ~5 minutes
+**See `OPENROUTESERVICE_SETUP.md` for detailed setup instructions!**
 
 ---
 
@@ -114,9 +113,10 @@ MOL_BUBI_API_ENABLED=true
 
 ## 📋 Quick Setup Checklist
 
-### Essential (Get These Now):
-- [ ] **OpenRouteService** - Get free API key (~5 min)
+### Essential APIs:
+- [x] **OpenRouteService** - ✅ API key obtained (just add to `.env`)
 - [x] **Weather API** - ✅ DONE! Using Open-Meteo (no key needed)
+- [x] **BKK FUTÁR** - ✅ Key created (waiting for activation ~2 days)
 
 ### Already Have:
 - [x] **BKK FUTÁR** - Key created, waiting for activation
@@ -129,14 +129,9 @@ MOL_BUBI_API_ENABLED=true
 
 ## 🚀 Quick Start Guide
 
-### Step 1: Get OpenRouteService Key
-1. Go to https://openrouteservice.org/
-2. Sign up (free)
-3. Copy API key
-4. Add to `smart-city-app/backend/.env`:
-   ```env
-   OPENROUTESERVICE_API_KEY=paste_your_key_here
-   ```
+### Step 1: OpenRouteService ✅ DONE!
+- ✅ API key obtained
+- Now add it to your `.env` file (see Step 3 below)
 
 ### Step 2: Weather API ✅ DONE!
 - **No action needed!** The app now uses Open-Meteo automatically
@@ -151,7 +146,7 @@ PORT=3001
 NODE_ENV=development
 
 # API Keys
-OPENROUTESERVICE_API_KEY=your_openrouteservice_key
+OPENROUTESERVICE_API_KEY=paste_your_openrouteservice_key_here
 # OPENWEATHER_API_KEY=your_openweather_key (optional - Open-Meteo used by default)
 
 # BKK FUTÁR API (already have)
@@ -162,6 +157,8 @@ BKK_API_ENABLED=true
 # OPENAI_API_KEY=your_openai_key
 # MOL_BUBI_API_ENABLED=false
 ```
+
+**Important:** Replace `paste_your_openrouteservice_key_here` with your actual OpenRouteService API key!
 
 ### Step 4: Restart Backend
 ```bash
@@ -187,10 +184,10 @@ npm run dev
 
 ## 🎯 Priority Order
 
-1. **OpenRouteService** ⭐⭐⭐ (HIGH)
-   - Needed for real routing
-   - Free, quick to get
-   - Makes a big difference in user experience
+1. **OpenRouteService** ⭐⭐⭐ (HIGH) ✅ DONE!
+   - ✅ API key obtained
+   - ✅ Just needs to be added to `.env` file
+   - ✅ Will enable real routing with turn-by-turn directions
 
 2. **Weather API** ⭐⭐⭐ (HIGH) ✅ DONE!
    - ✅ Using Open-Meteo (free, no key needed)
@@ -224,13 +221,32 @@ npm run dev
 
 ---
 
-## ✅ After Getting Keys
+## ✅ Current Status & Next Steps
 
-Once you have the keys:
-1. Add them to `.env` file
-2. Restart backend server
-3. Test endpoints to verify they work
-4. Check backend logs for "✅ API active!" messages
+### What's Done:
+- ✅ OpenRouteService API key obtained
+- ✅ Weather API working (Open-Meteo, no key needed)
+- ✅ BKK FUTÁR key created (waiting for activation)
 
-The app will automatically use real data when keys are available!
+### Action Required:
+1. **Add OpenRouteService key to `.env`:**
+   ```bash
+   cd smart-city-app/backend
+   # Edit .env file and add:
+   OPENROUTESERVICE_API_KEY=your_actual_key_here
+   ```
+
+2. **Restart backend server:**
+   ```bash
+   npm run dev
+   ```
+
+3. **Test it:**
+   ```bash
+   curl "http://localhost:3001/api/routes?from=47.4979,19.0402&to=47.5079,19.0502&mode=walking"
+   ```
+
+4. **Check backend logs** for "✅ OpenRouteService active!" messages
+
+The app will automatically use real routing when the key is configured!
 

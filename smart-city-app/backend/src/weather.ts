@@ -192,24 +192,27 @@ export class WeatherService {
         dailyForecasts[date].windSpeeds.push(item.wind.speed);
       });
 
-      return Object.keys(dailyForecasts).slice(0, 5).map(date => {
-        const dayData = dailyForecasts[date];
-        return {
-          date,
-          temperature: {
-            min: Math.round(Math.min(...dayData.temperatures)),
-            max: Math.round(Math.max(...dayData.temperatures))
-          },
-          description: dayData.descriptions[0],
-          icon: dayData.icons[0],
-          precipitation: Math.round(dayData.precipitation.reduce((a: number, b: number) => a + b, 0)),
-          windSpeed: Math.round(dayData.windSpeeds.reduce((a: number, b: number) => a + b, 0) / dayData.windSpeeds.length)
-        };
-      });
-    } catch (error) {
-      console.error('Error fetching weather forecast:', error);
-      return this.getMockForecast();
+        return Object.keys(dailyForecasts).slice(0, 5).map(date => {
+          const dayData = dailyForecasts[date];
+          return {
+            date,
+            temperature: {
+              min: Math.round(Math.min(...dayData.temperatures)),
+              max: Math.round(Math.max(...dayData.temperatures))
+            },
+            description: dayData.descriptions[0],
+            icon: dayData.icons[0],
+            precipitation: Math.round(dayData.precipitation.reduce((a: number, b: number) => a + b, 0)),
+            windSpeed: Math.round(dayData.windSpeeds.reduce((a: number, b: number) => a + b, 0) / dayData.windSpeeds.length)
+          };
+        });
+      } catch (error) {
+        console.error('Error fetching OpenWeatherMap forecast:', error);
+      }
     }
+
+    // Final fallback to mock data
+    return this.getMockForecast();
   }
 
   // Fetch forecast from Open-Meteo (free, no API key)
@@ -315,7 +318,7 @@ export class WeatherService {
         return this.getMockAlerts();
       }
 
-      const response = await axios.get(`${this.baseUrl}/onecall`, {
+      const response = await axios.get(`${this.openWeatherBaseUrl}/onecall`, {
         params: {
           lat: this.budapestCoords.lat,
           lon: this.budapestCoords.lng,

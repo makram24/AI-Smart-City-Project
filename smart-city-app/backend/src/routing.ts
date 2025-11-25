@@ -15,19 +15,34 @@ export class RoutingService {
   constructor() {
     this.openRouteApiKey = process.env.OPENROUTESERVICE_API_KEY || '';
     this.useRealApi = !!this.openRouteApiKey;
+    
+    if (this.useRealApi) {
+      console.log('✅ OpenRouteService API key found - real routing enabled');
+    } else {
+      console.info('💡 OpenRouteService API key not found - using fallback routes');
+      console.info('   Add OPENROUTESERVICE_API_KEY to .env file to enable real routing');
+    }
   }
 
   // Get walking route between two points
   async getWalkingRoute(from: [number, number], to: [number, number]): Promise<RouteResult | null> {
     if (this.useRealApi) {
       try {
-        return await this.fetchRealRoute(from, to, 'foot-walking');
-      } catch (error) {
-        console.warn('OpenRouteService walking route failed, using fallback:', error);
+        const route = await this.fetchRealRoute(from, to, 'foot-walking');
+        if (route) {
+          console.log('✅ OpenRouteService: Retrieved real walking route');
+          return route;
+        }
+      } catch (error: any) {
+        console.warn('⚠️ OpenRouteService walking route failed:', error.message || error);
+        if (error.response) {
+          console.warn(`   Status: ${error.response.status}, Message: ${error.response.statusText}`);
+        }
       }
     }
 
     // Fallback to simple calculation
+    console.info('💡 Using fallback route calculation (add OPENROUTESERVICE_API_KEY to .env for real routes)');
     return this.getSimpleRoute(from, to, 1.4); // 1.4 m/s average walking speed
   }
 
@@ -66,6 +81,7 @@ export class RoutingService {
     profile: 'foot-walking' | 'cycling-regular' | 'driving-car'
   ): Promise<RouteResult | null> {
     try {
+      console.log(`🔍 Attempting OpenRouteService API call for ${profile}...`);
       const response = await axios.post(
         `${this.baseUrl}/directions/${profile}`,
         {
@@ -77,15 +93,20 @@ export class RoutingService {
         {
           headers: {
             'Authorization': this.openRouteApiKey,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8'
           },
           timeout: 10000
         }
       );
 
+      console.log(`📡 OpenRouteService response status: ${response.status}`);
+
       if (response.data && response.data.routes && response.data.routes.length > 0) {
         const route = response.data.routes[0];
         const segments = route.segments || [];
+        
+        console.log(`✅ OpenRouteService returned ${segments.length} segments`);
         
         const instructions: string[] = [];
         segments.forEach((segment: any) => {
@@ -124,8 +145,20 @@ export class RoutingService {
         };
       }
       return null;
-    } catch (error) {
-      console.error(`Error fetching ${profile} route from OpenRouteService:`, error);
+    } catch (error: any) {
+      console.error(`❌ Error fetching ${profile} route from OpenRouteService:`);
+      if (error.response) {
+        console.error(`   Status: ${error.response.status}`);
+        console.error(`   Status Text: ${error.response.statusText}`);
+        console.error(`   Response:`, error.response.data);
+        if (error.response.status === 401 || error.response.status === 403) {
+          console.error('   ⚠️ Authentication failed - check API key');
+        }
+      } else if (error.request) {
+        console.error('   Network error - no response received');
+      } else {
+        console.error('   Error:', error.message);
+      }
       throw error;
     }
   }
