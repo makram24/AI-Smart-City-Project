@@ -123,6 +123,15 @@ class GeospatialService {
 
   async searchPlaces(query: string, lat: number, lng: number, radius: number = 1000): Promise<any[]> {
     try {
+      // STRICT: Only allow searches within Budapest area
+      if (lat < 47.3 || lat > 47.7 || lng < 18.9 || lng > 19.4) {
+        console.warn(`⚠️ Place search location [${lat}, ${lng}] is outside Budapest area - restricting to Budapest`);
+        // Force search to Budapest center if location is outside
+        lat = 47.4979; // Budapest center
+        lng = 19.0402;
+        console.log(`   Using Budapest center [${lat}, ${lng}] for search`);
+      }
+      
       const amenityMap: { [key: string]: string } = {
         'pharmacy': 'pharmacy',
         'pharmacies': 'pharmacy',
@@ -139,12 +148,17 @@ class GeospatialService {
 
       const amenity = amenityMap[query.toLowerCase()] || 'restaurant';
       
+      // STRICT Budapest bounding box: [south, west, north, east]
+      // Budapest city limits: South: 47.3, North: 47.7, West: 18.9, East: 19.4
+      const budapestBbox = '47.3,18.9,47.7,19.4';
+      
+      // Use bounding box to STRICTLY restrict search to Budapest area only
       const overpassQuery = `
         [out:json][timeout:25];
         (
-          node["amenity"="${amenity}"](around:${radius},${lat},${lng});
-          way["amenity"="${amenity}"](around:${radius},${lat},${lng});
-          relation["amenity"="${amenity}"](around:${radius},${lat},${lng});
+          node["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
+          way["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
+          relation["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
         );
         out center;
       `;
@@ -155,7 +169,25 @@ class GeospatialService {
         }
       });
 
-      return response.data.elements || [];
+      // STRICT: Filter results to ensure they're within Budapest boundaries
+      const results = (response.data.elements || []).filter((place: any) => {
+        const placeLat = place.lat || place.center?.lat;
+        const placeLng = place.lon || place.center?.lon;
+        
+        if (!placeLat || !placeLng) return false;
+        
+        // Strict Budapest validation
+        const isInBudapest = placeLat >= 47.3 && placeLat <= 47.7 && placeLng >= 18.9 && placeLng <= 19.4;
+        
+        if (!isInBudapest) {
+          console.warn(`⚠️ Filtered out place outside Budapest: [${placeLat}, ${placeLng}]`);
+        }
+        
+        return isInBudapest;
+      });
+
+      console.log(`📍 Found ${results.length} places in Budapest for "${query}"`);
+      return results;
     } catch (error) {
       console.error('Places search error:', error);
       return [];
@@ -623,6 +655,9 @@ app.get('/api/health', (req, res) => {
 app.post('/api/chat', async (req, res) => {
   const { message, userLocation } = req.body;
   
+  // Set a longer timeout for chat requests (geocoding + routing can take time)
+  req.setTimeout(30000); // 30 seconds
+  
   try {
     const result = await aiService.processQuery(message, userLocation);
     
@@ -645,7 +680,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Real places search endpoint
+// Real places search endpoint - STRICTLY limited to Budapest
 app.get('/api/places/search', async (req, res) => {
   const { query, lat, lng, radius = 1000 } = req.query;
   
@@ -654,32 +689,98 @@ app.get('/api/places/search', async (req, res) => {
       return res.status(400).json({ error: 'Latitude and longitude are required' });
     }
 
+    const searchLat = parseFloat(lat as string);
+    const searchLng = parseFloat(lng as string);
+    
+    // STRICT: Validate search location is in Budapest
+    if (searchLat < 47.3 || searchLat > 47.7 || searchLng < 18.9 || searchLng > 19.4) {
+      console.warn(`⚠️ Place search requested outside Budapest: [${searchLat}, ${searchLng}]`);
+      // Use Budapest center instead
+      const budapestCenter = { lat: 47.4979, lng: 19.0402 };
+      console.log(`   Redirecting search to Budapest center: [${budapestCenter.lat}, ${budapestCenter.lng}]`);
+      
+      const places = await geospatialService.searchPlaces(
+        query as string, 
+        budapestCenter.lat, 
+        budapestCenter.lng,
+        parseInt(radius as string)
+      );
+      
+      const formattedPlaces = places.map((place: any) => {
+        const placeLat = place.lat || place.center?.lat;
+        const placeLng = place.lon || place.center?.lon;
+        
+        // Final validation - ensure place is in Budapest
+        if (placeLat < 47.3 || placeLat > 47.7 || placeLng < 18.9 || placeLng > 19.4) {
+          return null;
+        }
+        
+        return {
+          id: place.id,
+          name: place.tags?.name || 'Unknown Place',
+          type: place.tags?.amenity || 'place',
+          position: [placeLat, placeLng],
+          description: place.tags?.opening_hours || place.tags?.cuisine || 'No additional info',
+          distance: geospatialService.calculateDistance(
+            budapestCenter.lat, 
+            budapestCenter.lng,
+            placeLat,
+            placeLng
+          ).toFixed(1) + ' km'
+        };
+      }).filter((place: any) => place !== null);
+
+      return res.json({
+        places: formattedPlaces,
+        query: query,
+        location: budapestCenter,
+        count: formattedPlaces.length,
+        note: 'Search limited to Budapest area'
+      });
+    }
+
     const places = await geospatialService.searchPlaces(
       query as string, 
-      parseFloat(lat as string), 
-      parseFloat(lng as string),
+      searchLat, 
+      searchLng,
       parseInt(radius as string)
     );
 
-    const formattedPlaces = places.map((place: any) => ({
-      id: place.id,
-      name: place.tags?.name || 'Unknown Place',
-      type: place.tags?.amenity || 'place',
-      position: [place.lat || place.center?.lat, place.lon || place.center?.lon],
-      description: place.tags?.opening_hours || place.tags?.cuisine || 'No additional info',
-      distance: geospatialService.calculateDistance(
-        parseFloat(lat as string), 
-        parseFloat(lng as string),
-        place.lat || place.center?.lat,
-        place.lon || place.center?.lon
-      ).toFixed(1) + ' km'
-    }));
+    const formattedPlaces = places.map((place: any) => {
+      const placeLat = place.lat || place.center?.lat;
+      const placeLng = place.lon || place.center?.lon;
+      
+      // STRICT: Final validation - ensure place is in Budapest
+      if (!placeLat || !placeLng) {
+        return null;
+      }
+      
+      if (placeLat < 47.3 || placeLat > 47.7 || placeLng < 18.9 || placeLng > 19.4) {
+        console.warn(`⚠️ Filtered out place outside Budapest: [${placeLat}, ${placeLng}]`);
+        return null;
+      }
+      
+      return {
+        id: place.id,
+        name: place.tags?.name || 'Unknown Place',
+        type: place.tags?.amenity || 'place',
+        position: [placeLat, placeLng],
+        description: place.tags?.opening_hours || place.tags?.cuisine || 'No additional info',
+        distance: geospatialService.calculateDistance(
+          searchLat, 
+          searchLng,
+          placeLat,
+          placeLng
+        ).toFixed(1) + ' km'
+      };
+    }).filter((place: any) => place !== null);
 
     res.json({
       places: formattedPlaces,
       query: query,
-      location: { lat, lng },
-      count: formattedPlaces.length
+      location: { lat: searchLat, lng: searchLng },
+      count: formattedPlaces.length,
+      note: 'All results are limited to Budapest area'
     });
   } catch (error) {
     console.error('Places search error:', error);
@@ -720,10 +821,24 @@ app.get('/api/routes', async (req, res) => {
   const { from, to, mode = 'walking' } = req.query;
   
   try {
+    // Validate that 'from' parameter is provided (should be user's current location)
+    if (!from) {
+      return res.status(400).json({ 
+        error: 'Start location (from) is required. Please provide your current location.' 
+      });
+    }
+    
     if (mode === 'public_transport') {
       // Public transport route
-      const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
+      const fromCoords = from.toString().split(',').map(Number);
       const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
+      
+      // Validate from coordinates
+      if (fromCoords.length !== 2 || isNaN(fromCoords[0]) || isNaN(fromCoords[1])) {
+        return res.status(400).json({ 
+          error: 'Invalid start location format. Expected: lat,lng' 
+        });
+      }
       
       const transportRoute = await publicTransportService.planJourney(
         [fromCoords[0], fromCoords[1]],
@@ -752,8 +867,24 @@ app.get('/api/routes', async (req, res) => {
       }
     } else if (mode === 'cycling') {
       // Cycling route using OpenRouteService or fallback
-      const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
+      // 'from' should always be user's current location (already validated above)
+      if (!from) {
+        return res.status(400).json({ 
+          error: 'Start location (from) is required. Please provide your current location.' 
+        });
+      }
+      
+      const fromCoords = from.toString().split(',').map(Number);
       const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
+      
+      // Validate from coordinates
+      if (fromCoords.length !== 2 || isNaN(fromCoords[0]) || isNaN(fromCoords[1])) {
+        return res.status(400).json({ 
+          error: 'Invalid start location format. Expected: lat,lng' 
+        });
+      }
+      
+      console.log(`🚴 Cycling route: From user location [${fromCoords[0]}, ${fromCoords[1]}] to [${toCoords[0]}, ${toCoords[1]}]`);
       
       const cyclingRoute = await routingService.getCyclingRoute(
         [fromCoords[0], fromCoords[1]],
@@ -792,7 +923,13 @@ app.get('/api/routes', async (req, res) => {
       }
     } else {
       // Walking route using OpenRouteService or fallback
-      // 'from' should always be user's current location
+      // 'from' should always be user's current location (already validated above)
+      if (!from) {
+        return res.status(400).json({ 
+          error: 'Start location (from) is required. Please provide your current location.' 
+        });
+      }
+      
       const fromCoords = from.toString().split(',').map(Number);
       const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
       
@@ -803,7 +940,7 @@ app.get('/api/routes', async (req, res) => {
         });
       }
       
-      console.log(`🗺️ Route request: From user location [${fromCoords[0]}, ${fromCoords[1]}] to [${toCoords[0]}, ${toCoords[1]}]`);
+      console.log(`🚶 Walking route: From user location [${fromCoords[0]}, ${fromCoords[1]}] to [${toCoords[0]}, ${toCoords[1]}]`);
       
       const walkingRoute = await routingService.getWalkingRoute(
         [fromCoords[0], fromCoords[1]],
