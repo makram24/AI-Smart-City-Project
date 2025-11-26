@@ -409,8 +409,15 @@ export default function Home() {
               position: stop.position as [number, number], // [lat, lng] format
               title: stop.name,
               description: `${stop.type.toUpperCase()} stop • Routes: ${stop.routes.join(', ')}`,
-              type: stop.type
+              type: stop.type // 'bus', 'tram', 'metro', or 'trolley'
             }));
+            
+            // Log metro and tram stations specifically
+            const metroStops = stopMarkers.filter(m => m.type === 'metro');
+            const tramStops = stopMarkers.filter(m => m.type === 'tram');
+            console.log(`🚇 Metro stations: ${metroStops.length}`, metroStops);
+            console.log(`🚋 Tram stations: ${tramStops.length}`, tramStops);
+            
             setMapMarkers(prev => {
               // Remove old transport stop markers and add new ones
               const filtered = prev.filter(m => !['bus', 'tram', 'metro', 'trolley'].includes(m.type || ''));

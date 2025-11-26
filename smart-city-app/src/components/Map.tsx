@@ -282,7 +282,16 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
   // Get icon for marker type
   const getMarkerIcon = (type?: string) => {
     if (!type) return icons.default;
-    return icons[type as keyof typeof icons] || icons.default;
+    const icon = icons[type as keyof typeof icons];
+    if (icon) {
+      // Log icon selection for metro and tram
+      if (type === 'metro' || type === 'tram') {
+        console.log(`📍 Using ${type} icon for marker`);
+      }
+      return icon;
+    }
+    console.warn(`⚠️ Unknown marker type: ${type}, using default icon`);
+    return icons.default;
   };
 
   if (!isClient) {
@@ -432,9 +441,15 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
             });
           }}
         >
-          {filteredMarkers.map((marker, index) => (
-            <Marker key={index} position={marker.position} icon={getMarkerIcon(marker.type)}>
-              <Popup maxWidth={300} minWidth={250}>
+          {filteredMarkers.map((marker, index) => {
+            const icon = getMarkerIcon(marker.type);
+            // Log metro and tram markers specifically
+            if (marker.type === 'metro' || marker.type === 'tram') {
+              console.log(`📍 Displaying ${marker.type} marker: ${marker.title} at [${marker.position[0]}, ${marker.position[1]}]`);
+            }
+            return (
+              <Marker key={index} position={marker.position} icon={icon}>
+                <Popup maxWidth={300} minWidth={250}>
                 <div className="popup-content">
                   {marker.image && (
                     <div className="popup-image mb-2">
@@ -503,10 +518,11 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
                       </div>
                     </div>
                   )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
         </MarkerClusterGroup>
       </MapContainer>
       

@@ -195,52 +195,87 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
           ) : (
             <div className="space-y-3">
               {/* Metro Stops */}
-              {transportStops.filter(stop => stop.type === 'metro').slice(0, 3).map((stop) => (
-                <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
-                    <Train className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{stop.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {stop.routes.join(', ')} • {stop.routes.length} lines
+              {transportStops.filter(stop => stop.type === 'metro').length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Metro Stations</h4>
+                  {transportStops.filter(stop => stop.type === 'metro').slice(0, 5).map((stop) => (
+                    <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
+                      <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
+                        <Train className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{stop.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {/* Tram Stops */}
+              {transportStops.filter(stop => stop.type === 'tram').length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Tram Stops</h4>
+                  {transportStops.filter(stop => stop.type === 'tram').slice(0, 5).map((stop) => (
+                    <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                        <Train className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{stop.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Bus Stops */}
-              {transportStops.filter(stop => stop.type === 'bus').slice(0, 2).map((stop) => (
-                <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                    <Bus className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{stop.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {stop.routes.join(', ')} • {stop.routes.length} routes
+              {transportStops.filter(stop => stop.type === 'bus').length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Bus Stops</h4>
+                  {transportStops.filter(stop => stop.type === 'bus').slice(0, 5).map((stop) => (
+                    <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
+                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                        <Bus className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{stop.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'route' : 'routes'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
 
               {/* Bike Stations */}
-              {bikeStations.slice(0, 3).map((station) => (
-                <div key={station.stationId} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-violet-600 rounded-full flex items-center justify-center">
-                    <Bike className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{station.stationName}</div>
-                    <div className="text-xs text-gray-500">
-                      {station.availableBikes} bikes • {station.availableDocks} docks
+              {bikeStations.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Bike Stations</h4>
+                  {bikeStations.slice(0, 5).map((station) => (
+                    <div key={station.stationId} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
+                      <div className="w-8 h-8 bg-violet-600 rounded-full flex items-center justify-center">
+                        <Bike className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{station.stationName}</div>
+                        <div className="text-xs text-gray-500">
+                          {station.availableBikes} bikes • {station.availableDocks} docks
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {Math.round(station.distance)}m
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {Math.round(station.distance)}m
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
