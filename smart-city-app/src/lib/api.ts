@@ -127,6 +127,19 @@ class ApiService {
     }
   }
 
+  // Get historical places
+  async getHistoricalPlaces(lat: number, lng: number, radius: number = 5000): Promise<HistoricalPlace[]> {
+    try {
+      const response = await this.api.get('/api/places/historical', {
+        params: { lat, lng, radius }
+      });
+      return response.data.places || [];
+    } catch (error) {
+      console.error('Historical places API error:', error);
+      throw error;
+    }
+  }
+
   // Geocoding API
   async geocode(address: string): Promise<GeocodeResult | null> {
     try {

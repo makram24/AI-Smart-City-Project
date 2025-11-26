@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { apiService, TransportStop, BikeStation, WeatherData, WeatherContext } from "@/lib/api";
 import NearbyPlaces from "./NearbyPlaces";
+import HistoricalPlaces from "./HistoricalPlaces";
 
 interface TransportPanelProps {
   userLocation: { lat: number; lng: number } | null;
@@ -432,6 +433,12 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
         
         {/* Nearby Places List */}
         <NearbyPlaces 
+          userLocation={userLocation} 
+          onRouteRequest={onRouteRequest}
+        />
+        
+        {/* Historical Places List */}
+        <HistoricalPlaces 
           userLocation={userLocation} 
           onRouteRequest={onRouteRequest}
         />
