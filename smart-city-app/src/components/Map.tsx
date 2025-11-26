@@ -71,14 +71,29 @@ interface MapProps {
   };
 }
 
-function MapController({ center, zoom }: { center?: [number, number]; zoom?: number }) {
+function MapController({ center, zoom, routeCoordinates }: { 
+  center?: [number, number]; 
+  zoom?: number;
+  routeCoordinates?: [number, number][];
+}) {
   const map = useMap();
   
   useEffect(() => {
-    if (center) {
+    if (routeCoordinates && routeCoordinates.length > 0) {
+      // Fit map to show entire route
+      try {
+        const bounds = L.latLngBounds(routeCoordinates);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      } catch (e) {
+        // Fallback to center if bounds calculation fails
+        if (center) {
+          map.setView(center, zoom || 13);
+        }
+      }
+    } else if (center) {
       map.setView(center, zoom || 13);
     }
-  }, [center, zoom, map]);
+  }, [center, zoom, map, routeCoordinates]);
 
   return null;
 }
@@ -183,16 +198,43 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
-        <MapController center={finalCenter} zoom={zoom} />
+        <MapController center={finalCenter} zoom={zoom} routeCoordinates={routeCoordinates} />
         
         {/* Route polyline */}
         {routeCoordinates.length > 0 && (
-          <Polyline
-            positions={routeCoordinates}
-            color="#3b82f6"
-            weight={4}
-            opacity={0.8}
-          />
+          <>
+            <Polyline
+              positions={routeCoordinates}
+              color="#3b82f6"
+              weight={5}
+              opacity={0.8}
+              smoothFactor={1}
+            />
+            {/* Start marker */}
+            {routeCoordinates.length > 0 && (
+              <Marker position={routeCoordinates[0]} icon={icons.user}>
+                <Popup>
+                  <div className="text-center">
+                    <strong>Route Start</strong>
+                    <br />
+                    <small>Your location</small>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+            {/* End marker */}
+            {routeCoordinates.length > 1 && (
+              <Marker position={routeCoordinates[routeCoordinates.length - 1]} icon={icons.destination}>
+                <Popup>
+                  <div className="text-center">
+                    <strong>Destination</strong>
+                    <br />
+                    <small>{route?.distance || 'N/A'} • {route?.duration || 'N/A'}</small>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+          </>
         )}
         
         {/* User location marker */}

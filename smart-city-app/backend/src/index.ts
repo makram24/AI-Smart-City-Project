@@ -203,8 +203,11 @@ class AIService {
   }> {
     const lowerMessage = message.toLowerCase();
 
-    // Route/Directions queries
-    if (lowerMessage.includes('route') || lowerMessage.includes('direction') || lowerMessage.includes('way to') || lowerMessage.includes('how to get')) {
+    // Route/Directions queries - check for various route-related phrases
+    if (lowerMessage.includes('route') || lowerMessage.includes('direction') || 
+        lowerMessage.includes('way to') || lowerMessage.includes('how to get') ||
+        lowerMessage.includes('best route') || lowerMessage.includes('show route') ||
+        lowerMessage.includes('get to') || lowerMessage.includes('navigate to')) {
       if (!userLocation) {
         return {
           text: 'I can help you with directions, but I need your location. Please allow location access.',
@@ -219,7 +222,7 @@ class AIService {
         return result;
       } else {
         return {
-          text: 'I can help you with directions! Please specify where you want to go (e.g., "route to Buda Castle" or "directions to the city center").',
+          text: 'I can help you with directions! Please specify where you want to go (e.g., "route to Buda Castle" or "best route to the city center").',
           markers: []
         };
       }
@@ -298,17 +301,31 @@ class AIService {
 
   private extractDestination(message: string): string | null {
     const patterns = [
+      /best route to (.+)/i,
       /route to (.+)/i,
       /directions to (.+)/i,
       /way to (.+)/i,
       /how to get to (.+)/i,
-      /go to (.+)/i
+      /how do i get to (.+)/i,
+      /go to (.+)/i,
+      /navigate to (.+)/i,
+      /show route to (.+)/i,
+      /get to (.+)/i,
+      /(.+) route/i,  // Catch "city center route" or "Buda Castle route"
+      /route (.+)/i   // Catch "route city center" or "route Buda Castle"
     ];
 
     for (const pattern of patterns) {
       const match = message.match(pattern);
-      if (match) {
-        return match[1].trim();
+      if (match && match[1]) {
+        const destination = match[1].trim();
+        // Filter out common stop words and route-related words
+        const stopWords = ['the', 'a', 'an', 'to', 'from', 'best', 'show', 'me', 'please'];
+        const words = destination.split(' ').filter(word => !stopWords.includes(word.toLowerCase()));
+        if (words.length > 0) {
+          return words.join(' ');
+        }
+        return destination;
       }
     }
 
@@ -341,8 +358,24 @@ class AIService {
         const duration = routingService.formatDuration(walkingRoute.duration);
         const firstInstructions = walkingRoute.instructions.slice(0, 3).join(' → ');
 
+        // Ensure geometry is in [lat, lng] format for frontend
+        // The routing service already returns [lat, lng], but let's ensure it's correct
+        const formattedGeometry = walkingRoute.geometry.map((coord: number[]) => {
+          if (Array.isArray(coord) && coord.length >= 2) {
+            // Ensure [lat, lng] format (Budapest lat ~47, lng ~19)
+            // If first value > second and first < 30, it's likely [lng, lat], swap it
+            if (coord[0] > coord[1] && coord[0] < 30 && coord[1] > 40) {
+              return [coord[1], coord[0]]; // Swap to [lat, lng]
+            }
+            return [coord[0], coord[1]]; // Already [lat, lng]
+          }
+          return coord;
+        });
+
+        console.log(`🗺️ Returning route with ${formattedGeometry.length} coordinates`);
+
         return {
-          text: `Here's your route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
+          text: `Here's the best route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
           markers: [{
             position: [toResult.lat, toResult.lng],
             title: toResult.display_name,
@@ -350,7 +383,7 @@ class AIService {
             type: 'destination'
           }],
           route: {
-            polyline: walkingRoute.geometry,
+            polyline: formattedGeometry.length > 0 ? formattedGeometry : walkingRoute.geometry,
             distance: distance,
             duration: duration,
             steps: walkingRoute.instructions.map((instruction, index) => ({

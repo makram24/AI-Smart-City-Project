@@ -112,9 +112,28 @@ export default function Home() {
         setMapMarkers(aiResponse.markers);
       }
 
-      // Update route if provided
+      // Update route if provided - ensure it's properly formatted
       if (aiResponse.route) {
-        setCurrentRoute(aiResponse.route);
+        console.log('🗺️ Route received from AI:', {
+          hasPolyline: !!aiResponse.route.polyline,
+          polylineLength: aiResponse.route.polyline?.length || 0,
+          distance: aiResponse.route.distance,
+          duration: aiResponse.route.duration
+        });
+        
+        // Ensure polyline is in correct format [lat, lng][]
+        const formattedRoute = {
+          ...aiResponse.route,
+          polyline: aiResponse.route.polyline?.map((coord: any) => {
+            if (Array.isArray(coord) && coord.length >= 2) {
+              return [coord[0], coord[1]]; // Keep as [lat, lng]
+            }
+            return coord;
+          }) || []
+        };
+        
+        setCurrentRoute(formattedRoute);
+        console.log('✅ Route set on map with', formattedRoute.polyline.length, 'coordinates');
       }
 
     } catch (error) {
