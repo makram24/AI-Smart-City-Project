@@ -20,9 +20,11 @@ import { apiService, TransportStop, BikeStation, WeatherData, WeatherContext } f
 interface TransportPanelProps {
   userLocation: { lat: number; lng: number } | null;
   onRouteRequest: (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => void;
+  onTransportStopsChange?: (stops: TransportStop[]) => void;
+  onBikeStationsChange?: (stations: BikeStation[]) => void;
 }
 
-export default function TransportPanel({ userLocation, onRouteRequest }: TransportPanelProps) {
+export default function TransportPanel({ userLocation, onRouteRequest, onTransportStopsChange, onBikeStationsChange }: TransportPanelProps) {
   const [transportStops, setTransportStops] = useState<TransportStop[]>([]);
   const [bikeStations, setBikeStations] = useState<BikeStation[]>([]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -55,6 +57,14 @@ export default function TransportPanel({ userLocation, onRouteRequest }: Transpo
       
       setTransportStops(stops);
       setBikeStations(bikes);
+      
+      // Notify parent component about transport stops and bike stations
+      if (onTransportStopsChange) {
+        onTransportStopsChange(stops);
+      }
+      if (onBikeStationsChange) {
+        onBikeStationsChange(bikes);
+      }
     } catch (error) {
       console.error('Error loading transport data:', error);
       setError('Failed to load transport data');

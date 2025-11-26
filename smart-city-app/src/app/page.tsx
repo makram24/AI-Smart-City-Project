@@ -403,6 +403,36 @@ export default function Home() {
         <TransportPanel 
           userLocation={userLocation}
           onRouteRequest={handleRouteRequest}
+          onTransportStopsChange={(stops) => {
+            // Convert transport stops to map markers
+            const stopMarkers = stops.map(stop => ({
+              position: stop.position as [number, number], // [lat, lng] format
+              title: stop.name,
+              description: `${stop.type.toUpperCase()} stop • Routes: ${stop.routes.join(', ')}`,
+              type: stop.type
+            }));
+            setMapMarkers(prev => {
+              // Remove old transport stop markers and add new ones
+              const filtered = prev.filter(m => !['bus', 'tram', 'metro', 'trolley'].includes(m.type || ''));
+              return [...filtered, ...stopMarkers];
+            });
+          }}
+          onBikeStationsChange={(stations) => {
+            // Convert bike stations to map markers
+            const bikeMarkers = stations
+              .filter(station => station.position || (station.lat && station.lng))
+              .map(station => ({
+                position: (station.position || [station.lat!, station.lng!]) as [number, number], // [lat, lng] format
+                title: station.stationName,
+                description: `${station.availableBikes} bikes available • ${station.availableDocks} docks`,
+                type: 'bike_station'
+              }));
+            setMapMarkers(prev => {
+              // Remove old bike station markers and add new ones
+              const filtered = prev.filter(m => m.type !== 'bike_station');
+              return [...filtered, ...bikeMarkers];
+            });
+          }}
         />
       </div>
       

@@ -62,6 +62,9 @@ export interface BikeStation {
   availableBikes: number;
   availableDocks: number;
   distance: number;
+  lat?: number;
+  lng?: number;
+  position?: [number, number];
 }
 
 export interface WeatherData {

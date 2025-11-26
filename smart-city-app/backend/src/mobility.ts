@@ -24,6 +24,9 @@ export interface BikeAvailability {
   availableBikes: number;
   availableDocks: number;
   distance: number; // meters from user
+  lat?: number;
+  lng?: number;
+  position?: [number, number];
 }
 
 export class SharedMobilityService {
@@ -303,7 +306,10 @@ export class SharedMobilityService {
             stationName: station.name,
             availableBikes: station.availableBikes,
             availableDocks: station.availableDocks,
-            distance
+            distance,
+            lat: station.position[0], // Include position for map markers
+            lng: station.position[1],
+            position: station.position // Include full position array
           };
         })
         .filter(station => station.distance <= radius)
