@@ -228,35 +228,75 @@ export default function Home() {
   };
 
   const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
-    if (!userLocation) return;
+    if (!userLocation) {
+      console.warn('User location not available for route planning');
+      return;
+    }
 
     setIsLoading(true);
     try {
+      // Check if destination is coordinates or an address
+      let destinationCoords = destination;
+      const coordPattern = /^-?\d+\.?\d*,-?\d+\.?\d*$/;
+      
+      if (!coordPattern.test(destination.trim())) {
+        // It's an address, need to geocode it
+        console.log(`Geocoding destination: ${destination}`);
+        const geocodeResult = await apiService.geocode(destination);
+        if (geocodeResult) {
+          destinationCoords = `${geocodeResult.lat},${geocodeResult.lng}`;
+          console.log(`Geocoded to: ${destinationCoords} (${geocodeResult.display_name})`);
+        } else {
+          throw new Error(`Could not find location: ${destination}`);
+        }
+      }
+
       const route = await apiService.getRoute(
         `${userLocation.lat},${userLocation.lng}`,
-        destination,
+        destinationCoords,
         mode
       );
 
       if (route) {
+        // Ensure polyline is in correct format [lat, lng][]
+        const formattedPolyline = route.polyline?.map((coord: any) => {
+          if (Array.isArray(coord) && coord.length >= 2) {
+            return [coord[0], coord[1]]; // Keep as [lat, lng]
+          }
+          return coord;
+        }) || [];
+
         setCurrentRoute({
-          polyline: route.polyline,
+          polyline: formattedPolyline,
           distance: route.distance,
           duration: route.duration
         });
 
-        // Add route message
+        // Add route message with instructions
+        const instructionsText = route.steps && route.steps.length > 0
+          ? route.steps.slice(0, 3).map((step: any) => step.instruction).join(' → ')
+          : 'Route calculated';
+
         const routeMessage: ChatMessage = {
           id: Date.now().toString(),
-          text: `Route planned: ${route.distance} in ${route.duration} by ${mode.replace('_', ' ')}`,
+          text: `Route planned: ${route.distance} in ${route.duration} by ${mode.replace('_', ' ')}. ${instructionsText}`,
           sender: 'ai',
           timestamp: new Date().toISOString(),
           route: route
         };
         setMessages(prev => [...prev, routeMessage]);
+      } else {
+        throw new Error('No route found');
       }
     } catch (error) {
       console.error('Route planning error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: `Sorry, I couldn't plan a route to "${destination}". Please check the address or try a different destination.`,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }

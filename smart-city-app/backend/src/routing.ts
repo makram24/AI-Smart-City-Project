@@ -183,25 +183,26 @@ export class RoutingService {
         const geometry: number[][] = [];
         
         if (route.geometry) {
-          // Format 1: GeoJSON coordinates array
+          // Format 1: GeoJSON LineString with coordinates
           if (route.geometry.type === 'LineString' && Array.isArray(route.geometry.coordinates)) {
             route.geometry.coordinates.forEach((coord: number[]) => {
               if (Array.isArray(coord) && coord.length >= 2) {
-                geometry.push([coord[1], coord[0]]); // Convert [lng, lat] to [lat, lng]
+                // OpenRouteService returns [lng, lat], convert to [lat, lng] for frontend
+                geometry.push([coord[1], coord[0]]);
               }
             });
           }
-          // Format 2: Direct coordinates array
+          // Format 2: Direct coordinates array (GeoJSON format)
           else if (Array.isArray(route.geometry.coordinates)) {
             route.geometry.coordinates.forEach((coord: number[]) => {
               if (Array.isArray(coord) && coord.length >= 2) {
-                geometry.push([coord[1], coord[0]]); // Convert [lng, lat] to [lat, lng]
+                // OpenRouteService returns [lng, lat], convert to [lat, lng]
+                geometry.push([coord[1], coord[0]]);
               }
             });
           }
-          // Format 3: Encoded polyline string (need to decode)
+          // Format 3: Encoded polyline string
           else if (typeof route.geometry === 'string') {
-            // If it's an encoded polyline, decode it
             try {
               const decoded = this.decodePolyline(route.geometry);
               geometry.push(...decoded);
@@ -211,35 +212,61 @@ export class RoutingService {
           }
         }
         
-        // If no geometry extracted, use segments waypoints
+        // Alternative: Try to extract from segments if geometry not available
         if (geometry.length === 0 && segments.length > 0) {
           segments.forEach((segment: any) => {
+            // Try to get coordinates from segment steps
+            if (segment.steps && Array.isArray(segment.steps)) {
+              segment.steps.forEach((step: any) => {
+                if (step.location && Array.isArray(step.location) && step.location.length >= 2) {
+                  // step.location might be [lng, lat] or [lat, lng], check and convert
+                  const lat = step.location[1] || step.location[0];
+                  const lng = step.location[0] || step.location[1];
+                  if (typeof lat === 'number' && typeof lng === 'number') {
+                    geometry.push([lat, lng]);
+                  }
+                }
+              });
+            }
+            // Try way_points if available
             if (segment.way_points && Array.isArray(segment.way_points)) {
-              // Waypoints are indices into the full geometry, but we can use segment start/end
-              if (segment.steps && segment.steps.length > 0) {
-                const firstStep = segment.steps[0];
-                const lastStep = segment.steps[segment.steps.length - 1];
-                if (firstStep.location) {
-                  geometry.push([firstStep.location[1], firstStep.location[0]]);
-                }
-                if (lastStep.location && lastStep !== firstStep) {
-                  geometry.push([lastStep.location[1], lastStep.location[0]]);
-                }
-              }
+              // Waypoints are indices, we'd need the full geometry to use them
             }
           });
         }
 
+        // Remove duplicates and ensure minimum 2 points
+        const uniqueGeometry = geometry.filter((coord, index, self) => 
+          index === self.findIndex(c => c[0] === coord[0] && c[1] === coord[1])
+        );
+
         // Final fallback: use start and end points
-        if (geometry.length === 0) {
-          geometry.push(from, to);
+        if (uniqueGeometry.length < 2) {
+          uniqueGeometry.length = 0; // Clear if insufficient
+          uniqueGeometry.push(from, to);
           console.warn('⚠️ No geometry extracted, using start/end points only');
+        }
+
+        // Ensure we have at least start and end points
+        if (uniqueGeometry.length > 0) {
+          // Ensure first point is start and last is end
+          const firstPoint = uniqueGeometry[0];
+          const lastPoint = uniqueGeometry[uniqueGeometry.length - 1];
+          const startDist = Math.abs(firstPoint[0] - from[0]) + Math.abs(firstPoint[1] - from[1]);
+          const endDist = Math.abs(lastPoint[0] - to[0]) + Math.abs(lastPoint[1] - to[1]);
+          
+          if (startDist > 0.01) {
+            uniqueGeometry.unshift(from);
+          }
+          if (endDist > 0.01) {
+            uniqueGeometry.push(to);
+          }
         }
 
         return {
           distance: Math.round(route.summary?.distance || 0),
           duration: Math.round(route.summary?.duration || 0),
-          geometry: geometry,
+          geometry: uniqueGeometry.length > 0 ? uniqueGeometry : [from, to],
           instructions: instructions.length > 0 ? instructions : [
             `Start from origin (${from[0].toFixed(4)}, ${from[1].toFixed(4)})`,
             `Follow the route`,

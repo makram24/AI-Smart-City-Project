@@ -330,20 +330,64 @@ class AIService {
         };
       }
 
-      // Mock route for now (will be enhanced in Phase 3)
+      // Get real route using OpenRouteService
+      const walkingRoute = await routingService.getWalkingRoute(
+        [userLocation.lat, userLocation.lng],
+        [toResult.lat, toResult.lng]
+      );
+
+      if (walkingRoute) {
+        const distance = routingService.formatDistance(walkingRoute.distance);
+        const duration = routingService.formatDuration(walkingRoute.duration);
+        const firstInstructions = walkingRoute.instructions.slice(0, 3).join(' → ');
+
+        return {
+          text: `Here's your route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
+          markers: [{
+            position: [toResult.lat, toResult.lng],
+            title: toResult.display_name,
+            description: 'Destination',
+            type: 'destination'
+          }],
+          route: {
+            polyline: walkingRoute.geometry,
+            distance: distance,
+            duration: duration,
+            steps: walkingRoute.instructions.map((instruction, index) => ({
+              instruction,
+              distance: index < walkingRoute.instructions.length - 1 ? 'N/A' : distance,
+              type: 'walking'
+            })),
+            mode: 'walking'
+          }
+        };
+      }
+
+      // Fallback to simple distance calculation if routing fails
       const distance = geospatialService.calculateDistance(
         userLocation.lat, userLocation.lng,
         toResult.lat, toResult.lng
       );
 
       return {
-        text: `Here's your route to ${toResult.display_name}. It's about ${distance.toFixed(1)} km away. I'll add real routing in Phase 3!`,
+        text: `Here's your route to ${toResult.display_name}. It's about ${distance.toFixed(1)} km away.`,
         markers: [{
           position: [toResult.lat, toResult.lng],
           title: toResult.display_name,
           description: 'Destination',
           type: 'destination'
-        }]
+        }],
+        route: {
+          polyline: [[userLocation.lat, userLocation.lng], [toResult.lat, toResult.lng]],
+          distance: `${distance.toFixed(1)} km`,
+          duration: `${Math.round(distance * 12)} min`,
+          steps: [
+            { instruction: 'Start from origin', distance: 'N/A', type: 'walking' },
+            { instruction: 'Follow the route', distance: 'N/A', type: 'walking' },
+            { instruction: `Arrive at ${toResult.display_name}`, distance: distance.toFixed(1) + ' km', type: 'walking' }
+          ],
+          mode: 'walking'
+        }
       };
     } catch (error) {
       console.error('Directions error:', error);
@@ -598,6 +642,18 @@ app.get('/api/routes', async (req, res) => {
       );
       
       if (cyclingRoute) {
+        // Ensure geometry is in [lat, lng] format for frontend
+        const formattedGeometry = cyclingRoute.geometry.map((coord: number[]) => {
+          if (Array.isArray(coord) && coord.length >= 2) {
+            // Check if we need to swap [lng, lat] to [lat, lng]
+            if (coord[0] > coord[1] && coord[0] < 30 && coord[1] > 40) {
+              return [coord[1], coord[0]];
+            }
+            return [coord[0], coord[1]];
+          }
+          return coord;
+        });
+
         res.json({
           id: Date.now().toString(),
           mode: 'cycling',
@@ -610,7 +666,7 @@ app.get('/api/routes', async (req, res) => {
             distance: index < cyclingRoute.instructions.length - 1 ? 'N/A' : routingService.formatDistance(cyclingRoute.distance),
             type: 'cycling'
           })),
-          polyline: cyclingRoute.geometry
+          polyline: formattedGeometry.length > 0 ? formattedGeometry : cyclingRoute.geometry
         });
       } else {
         res.status(404).json({ error: 'No cycling route found' });
@@ -626,6 +682,21 @@ app.get('/api/routes', async (req, res) => {
       );
       
       if (walkingRoute) {
+        // Ensure geometry is in [lat, lng] format for frontend
+        const formattedGeometry = walkingRoute.geometry.map((coord: number[]) => {
+          // If coordinate is [lng, lat], swap to [lat, lng]
+          // OpenRouteService returns [lng, lat], but frontend expects [lat, lng]
+          if (Array.isArray(coord) && coord.length >= 2) {
+            // Check if we need to swap (lng is typically larger than lat for Budapest area)
+            // Budapest lat ~47, lng ~19, so if first > second, it's likely [lng, lat]
+            if (coord[0] > coord[1] && coord[0] < 30 && coord[1] > 40) {
+              return [coord[1], coord[0]]; // Swap [lng, lat] to [lat, lng]
+            }
+            return [coord[0], coord[1]]; // Already [lat, lng]
+          }
+          return coord;
+        });
+
         res.json({
           id: Date.now().toString(),
           mode: 'walking',
@@ -638,7 +709,7 @@ app.get('/api/routes', async (req, res) => {
             distance: index < walkingRoute.instructions.length - 1 ? 'N/A' : routingService.formatDistance(walkingRoute.distance),
             type: 'walking'
           })),
-          polyline: walkingRoute.geometry
+          polyline: formattedGeometry.length > 0 ? formattedGeometry : walkingRoute.geometry
         });
       } else {
         res.status(404).json({ error: 'No walking route found' });
