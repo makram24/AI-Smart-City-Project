@@ -73,8 +73,9 @@ export class PublicTransportService {
 
     // Fallback to mock data
     try {
-      // Mock data for Budapest transport stops
+      // Mock data for Budapest transport stops (expanded coverage)
       const mockStops: TransportStop[] = [
+        // City Center / Pest Side
         {
           id: 'stop_001',
           name: 'Deák Ferenc tér M',
@@ -103,6 +104,7 @@ export class PublicTransportService {
           type: 'metro',
           routes: ['M3', 'M4']
         },
+        // Buda Side
         {
           id: 'stop_005',
           name: 'Széll Kálmán tér M',
@@ -130,6 +132,92 @@ export class PublicTransportService {
           position: [47.5079, 19.0302],
           type: 'metro',
           routes: ['M2']
+        },
+        // Northern Budapest (closer to user location)
+        {
+          id: 'stop_009',
+          name: 'Árpád híd M',
+          position: [47.5340, 19.0550],
+          type: 'metro',
+          routes: ['M3']
+        },
+        {
+          id: 'stop_010',
+          name: 'Újpest-központ M',
+          position: [47.5500, 19.0800],
+          type: 'metro',
+          routes: ['M3']
+        },
+        {
+          id: 'stop_011',
+          name: 'Újpest-városkapu M',
+          position: [47.5450, 19.0700],
+          type: 'metro',
+          routes: ['M3']
+        },
+        {
+          id: 'stop_012',
+          name: 'Gyöngyösi utca M',
+          position: [47.5400, 19.0600],
+          type: 'metro',
+          routes: ['M3']
+        },
+        {
+          id: 'stop_013',
+          name: 'Forgách utca M',
+          position: [47.5350, 19.0500],
+          type: 'metro',
+          routes: ['M3']
+        },
+        {
+          id: 'stop_014',
+          name: 'Rákospalota-Újpest',
+          position: [47.5550, 19.0900],
+          type: 'bus',
+          routes: ['30', '230', '270']
+        },
+        {
+          id: 'stop_015',
+          name: 'Szent István út',
+          position: [47.5480, 19.0450],
+          type: 'bus',
+          routes: ['15', '115', '914']
+        },
+        // Additional central locations
+        {
+          id: 'stop_016',
+          name: 'Nyugati pályaudvar M',
+          position: [47.5100, 19.0570],
+          type: 'metro',
+          routes: ['M3']
+        },
+        {
+          id: 'stop_017',
+          name: 'Oktogon M',
+          position: [47.5050, 19.0600],
+          type: 'metro',
+          routes: ['M1']
+        },
+        {
+          id: 'stop_018',
+          name: 'Kodály körönd M',
+          position: [47.5120, 19.0650],
+          type: 'metro',
+          routes: ['M1']
+        },
+        {
+          id: 'stop_019',
+          name: 'Bajza utca M',
+          position: [47.5150, 19.0700],
+          type: 'metro',
+          routes: ['M1']
+        },
+        {
+          id: 'stop_020',
+          name: 'Hősök tere M',
+          position: [47.5150, 19.0780],
+          type: 'metro',
+          routes: ['M1']
         }
       ];
 
@@ -165,22 +253,61 @@ export class PublicTransportService {
         timeout: 5000
       });
 
-      // BKK FUTÁR API response structure
-      if (response.data && response.data.data && response.data.data.list) {
-        return response.data.data.list.map((stop: any) => ({
-          id: stop.id || stop.stopId || `stop_${stop.code}`,
-          name: stop.name || stop.stopName || 'Unknown Stop',
-          position: [
-            stop.lat || stop.coordinates?.lat || stop.latitude,
-            stop.lon || stop.coordinates?.lon || stop.longitude
-          ],
-          type: this.mapStopType(stop.routeType || stop.type || stop.stopType),
-          routes: stop.routes ? stop.routes.map((r: any) => r.shortName || r.name || r.routeShortName) : []
-        }));
+      // Enhanced response logging for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 BKK API Response Structure:', JSON.stringify(response.data, null, 2).substring(0, 500));
       }
+
+      // BKK FUTÁR API response structure - try multiple possible structures
+      let stopsList: any[] = [];
+      
+      if (response.data?.data?.list) {
+        stopsList = response.data.data.list;
+      } else if (response.data?.data?.stops) {
+        stopsList = response.data.data.stops;
+      } else if (Array.isArray(response.data?.data)) {
+        stopsList = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        stopsList = response.data;
+      }
+
+      if (stopsList && stopsList.length > 0) {
+        return stopsList.map((stop: any) => {
+          // Extract position with multiple fallbacks
+          const lat = stop.lat ?? stop.latitude ?? stop.coordinates?.lat ?? stop.location?.lat ?? stop.position?.[0];
+          const lon = stop.lon ?? stop.longitude ?? stop.coordinates?.lon ?? stop.location?.lon ?? stop.position?.[1];
+          
+          // Validate position
+          if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
+            console.warn('⚠️ Invalid stop position, skipping:', stop);
+            return null;
+          }
+
+          return {
+            id: stop.id || stop.stopId || stop.stop_id || `stop_${stop.code || stop.stopCode || Date.now()}`,
+            name: stop.name || stop.stopName || stop.stop_name || 'Unknown Stop',
+            position: [lat, lon],
+            type: this.mapStopType(stop.routeType || stop.type || stop.stopType || stop.route_type),
+            routes: stop.routes ? stop.routes.map((r: any) => r.shortName || r.name || r.routeShortName || r.route_short_name || r) : []
+          };
+        }).filter((stop): stop is TransportStop => stop !== null);
+      }
+      
+      console.warn('⚠️ BKK API returned empty or unexpected response structure');
       return [];
-    } catch (error) {
-      console.error('Error fetching real BKK stops:', error);
+    } catch (error: any) {
+      // Enhanced error logging
+      if (error.response) {
+        console.error('❌ BKK API Error Response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      } else if (error.request) {
+        console.error('❌ BKK API Network Error - No response received');
+      } else {
+        console.error('❌ BKK API Error:', error.message);
+      }
       throw error;
     }
   }
@@ -264,44 +391,114 @@ export class PublicTransportService {
   private async fetchRealArrivals(stopId: string): Promise<ArrivalInfo[]> {
     try {
       // Clean stop ID (remove 'stop_' prefix if present)
-      const cleanStopId = stopId.replace('stop_', '');
+      const cleanStopId = stopId.replace(/^stop_/, '');
       
-      // BKK FUTÁR API endpoint for arrivals and departures
-      const response = await axios.get(`${this.bkkApiBaseUrl}/arrivals-and-departures-for-stop`, {
-        params: {
-          stopId: cleanStopId,
-          key: this.apiKey, // API key as query parameter
-          minutesBefore: 0,
-          minutesAfter: 30
-        },
-        headers: {
-          'User-Agent': this.userAgent,
-          'Accept': 'application/json'
-        },
-        timeout: 5000
-      });
+      // Try multiple parameter name variations
+      const tryParams = [
+        { stopId: cleanStopId },
+        { stop_id: cleanStopId },
+        { id: cleanStopId }
+      ];
 
-      if (response.data && response.data.data && response.data.data.entry) {
-        const arrivals = response.data.data.entry.arrivalsAndDepartures || [];
+      let response: any = null;
+      let lastError: any = null;
+
+      // Try each parameter variation
+      for (const params of tryParams) {
+        try {
+          response = await axios.get(`${this.bkkApiBaseUrl}/arrivals-and-departures-for-stop`, {
+            params: {
+              ...params,
+              key: this.apiKey,
+              minutesBefore: 0,
+              minutesAfter: 30
+            },
+            headers: {
+              'User-Agent': this.userAgent,
+              'Accept': 'application/json'
+            },
+            timeout: 5000
+          });
+          
+          // If we got a successful response, break
+          if (response.status === 200) {
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          // Continue to next parameter variation
+          continue;
+        }
+      }
+
+      if (!response || response.status !== 200) {
+        throw lastError || new Error('Failed to fetch arrivals with any parameter variation');
+      }
+
+      // Enhanced response logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 BKK Arrivals Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
+      }
+
+      // Try multiple response structures
+      let arrivals: any[] = [];
+      
+      if (response.data?.data?.entry?.arrivalsAndDepartures) {
+        arrivals = response.data.data.entry.arrivalsAndDepartures;
+      } else if (response.data?.data?.arrivalsAndDepartures) {
+        arrivals = response.data.data.arrivalsAndDepartures;
+      } else if (response.data?.arrivalsAndDepartures) {
+        arrivals = response.data.arrivalsAndDepartures;
+      } else if (Array.isArray(response.data?.data)) {
+        arrivals = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        arrivals = response.data;
+      }
+
+      if (arrivals && arrivals.length > 0) {
         return arrivals.map((arrival: any) => {
-          const route = arrival.routeShortName || arrival.routeId || 'Unknown';
-          const predictedTime = arrival.predictedArrivalTime || arrival.scheduledArrivalTime;
-          const scheduledTime = arrival.scheduledArrivalTime;
+          const route = arrival.routeShortName || arrival.route_short_name || arrival.routeId || arrival.route?.shortName || 'Unknown';
+          
+          // Handle timestamp - check if it's in seconds or milliseconds
+          const predictedTimeRaw = arrival.predictedArrivalTime || arrival.predicted_arrival_time || arrival.predictedTime;
+          const scheduledTimeRaw = arrival.scheduledArrivalTime || arrival.scheduled_arrival_time || arrival.scheduledTime;
+          
+          // Convert to milliseconds if needed (check if timestamp is in seconds)
+          const isPredictedSeconds = predictedTimeRaw && predictedTimeRaw < 10000000000;
+          const isScheduledSeconds = scheduledTimeRaw && scheduledTimeRaw < 10000000000;
+          
+          const predictedTime = predictedTimeRaw ? (isPredictedSeconds ? predictedTimeRaw * 1000 : predictedTimeRaw) : null;
+          const scheduledTime = scheduledTimeRaw ? (isScheduledSeconds ? scheduledTimeRaw * 1000 : scheduledTimeRaw) : null;
+          
+          const now = Date.now();
           const delay = predictedTime && scheduledTime ? Math.round((predictedTime - scheduledTime) / 1000 / 60) : 0;
-          const minutesUntil = predictedTime ? Math.round((predictedTime - Date.now()) / 1000 / 60) : 0;
+          const minutesUntil = predictedTime ? Math.round((predictedTime - now) / 1000 / 60) : null;
 
           return {
             route: route,
-            destination: arrival.tripHeadsign || arrival.headsign || 'Unknown',
-            arrivalTime: minutesUntil > 0 ? `${minutesUntil} min` : 'Arriving',
+            destination: arrival.tripHeadsign || arrival.trip_headsign || arrival.headsign || arrival.destination || 'Unknown',
+            arrivalTime: minutesUntil !== null && minutesUntil > 0 ? `${minutesUntil} min` : minutesUntil === 0 ? 'Arriving' : 'Unknown',
             delay: delay > 0 ? delay : undefined,
-            vehicleType: this.mapStopType(arrival.routeType || arrival.route?.type)
+            vehicleType: this.mapStopType(arrival.routeType || arrival.route_type || arrival.route?.type)
           };
         }).slice(0, 10); // Limit to 10 arrivals
       }
+      
+      console.warn('⚠️ BKK Arrivals API returned empty or unexpected response structure');
       return [];
-    } catch (error) {
-      console.error('Error fetching real BKK arrivals:', error);
+    } catch (error: any) {
+      // Enhanced error logging
+      if (error.response) {
+        console.error('❌ BKK Arrivals API Error Response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      } else if (error.request) {
+        console.error('❌ BKK Arrivals API Network Error - No response received');
+      } else {
+        console.error('❌ BKK Arrivals API Error:', error.message);
+      }
       throw error;
     }
   }
@@ -363,49 +560,110 @@ export class PublicTransportService {
   // Fetch real journey plan from BKK FUTÁR API
   private async fetchRealJourney(from: [number, number], to: [number, number]): Promise<TransportRoutePlan | null> {
     try {
-      // BKK FUTÁR API endpoint for trip planning
-      const response = await axios.get(`${this.bkkApiBaseUrl}/plan-trip`, {
-        params: {
-          fromPlace: `${from[0]},${from[1]}`,
-          toPlace: `${to[0]},${to[1]}`,
-          key: this.apiKey, // API key as query parameter
-          mode: 'TRANSIT,WALK',
-          arriveBy: false,
-          numItineraries: 1
-        },
-        headers: {
-          'User-Agent': this.userAgent,
-          'Accept': 'application/json'
-        },
-        timeout: 10000
-      });
+      // Try multiple coordinate formats
+      const coordinateFormats = [
+        { fromPlace: `${from[0]},${from[1]}`, toPlace: `${to[0]},${to[1]}` }, // lat,lng
+        { fromPlace: `${from[1]},${from[0]}`, toPlace: `${to[1]},${to[0]}` }, // lng,lat
+        { fromPlace: `${from[0]};${from[1]}`, toPlace: `${to[0]};${to[1]}` }, // lat;lng
+      ];
 
-      if (response.data && response.data.data && response.data.data.plan) {
-        const plan = response.data.data.plan;
-        const itinerary = plan.itineraries?.[0];
+      let response: any = null;
+      let lastError: any = null;
+
+      // Try each coordinate format
+      for (const format of coordinateFormats) {
+        try {
+          response = await axios.get(`${this.bkkApiBaseUrl}/plan-trip`, {
+            params: {
+              ...format,
+              key: this.apiKey,
+              mode: 'TRANSIT,WALK',
+              arriveBy: false,
+              numItineraries: 1
+            },
+            headers: {
+              'User-Agent': this.userAgent,
+              'Accept': 'application/json'
+            },
+            timeout: 10000
+          });
+          
+          if (response.status === 200) {
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          continue;
+        }
+      }
+
+      if (!response || response.status !== 200) {
+        throw lastError || new Error('Failed to fetch journey with any coordinate format');
+      }
+
+      // Enhanced response logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 BKK Journey Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
+      }
+
+      // Try multiple response structures
+      let plan: any = null;
+      if (response.data?.data?.plan) {
+        plan = response.data.data.plan;
+      } else if (response.data?.plan) {
+        plan = response.data.plan;
+      } else if (response.data?.data) {
+        plan = response.data.data;
+      }
+
+      if (plan) {
+        const itinerary = plan.itineraries?.[0] || plan.itinerary?.[0] || plan;
         
-        if (itinerary) {
-          const steps = itinerary.legs.map((leg: any) => ({
-            type: leg.mode === 'WALK' ? 'walk' : leg.mode.toLowerCase(),
-            route: leg.route?.shortName || leg.route?.longName,
-            from: leg.from?.name || 'Unknown',
-            to: leg.to?.name || 'Unknown',
-            duration: Math.round(leg.duration / 60), // Convert seconds to minutes
-            distance: leg.distance ? Math.round(leg.distance) : undefined
-          }));
+        if (itinerary && itinerary.legs) {
+          const steps = itinerary.legs.map((leg: any) => {
+            // Handle duration - check if in seconds or milliseconds
+            const durationRaw = leg.duration || 0;
+            const durationSeconds = durationRaw < 10000 ? durationRaw : Math.round(durationRaw / 1000);
+            
+            return {
+              type: leg.mode === 'WALK' ? 'walk' : (leg.mode || 'unknown').toLowerCase(),
+              route: leg.route?.shortName || leg.route?.short_name || leg.route?.longName || leg.route?.long_name || leg.routeName || undefined,
+              from: leg.from?.name || leg.fromName || leg.from?.stopName || 'Unknown',
+              to: leg.to?.name || leg.toName || leg.to?.stopName || 'Unknown',
+              duration: Math.round(durationSeconds / 60), // Convert to minutes
+              distance: leg.distance ? Math.round(leg.distance) : undefined
+            };
+          });
+
+          // Handle total duration
+          const totalDurationRaw = itinerary.duration || 0;
+          const totalDurationSeconds = totalDurationRaw < 10000 ? totalDurationRaw : Math.round(totalDurationRaw / 1000);
 
           return {
-            from: itinerary.legs[0]?.from?.name || 'Starting point',
-            to: itinerary.legs[itinerary.legs.length - 1]?.to?.name || 'Destination',
-            duration: Math.round(itinerary.duration / 60),
-            transfers: itinerary.transfers || 0,
+            from: itinerary.legs[0]?.from?.name || itinerary.legs[0]?.fromName || 'Starting point',
+            to: itinerary.legs[itinerary.legs.length - 1]?.to?.name || itinerary.legs[itinerary.legs.length - 1]?.toName || 'Destination',
+            duration: Math.round(totalDurationSeconds / 60),
+            transfers: itinerary.transfers || itinerary.numberOfTransfers || 0,
             steps
           };
         }
       }
+      
+      console.warn('⚠️ BKK Journey API returned empty or unexpected response structure');
       return null;
-    } catch (error) {
-      console.error('Error fetching real BKK journey:', error);
+    } catch (error: any) {
+      // Enhanced error logging
+      if (error.response) {
+        console.error('❌ BKK Journey API Error Response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      } else if (error.request) {
+        console.error('❌ BKK Journey API Network Error - No response received');
+      } else {
+        console.error('❌ BKK Journey API Error:', error.message);
+      }
       throw error;
     }
   }
@@ -474,21 +732,43 @@ export class PublicTransportService {
     endTime?: string;
   }>> {
     try {
-      // BKK GTFS-realtime Alerts endpoint (text format for easier parsing)
-      const response = await axios.get(`${this.bkkGtfsRtBaseUrl}/Alerts.txt`, {
-        params: {
-          key: this.apiKey
-        },
-        headers: {
-          'User-Agent': this.userAgent,
-          'Accept': 'text/plain'
-        },
-        timeout: 5000
-      });
+      // Try both text and JSON formats
+      const endpoints = [
+        { url: `${this.bkkGtfsRtBaseUrl}/Alerts.txt`, accept: 'text/plain' },
+        { url: `${this.bkkGtfsRtBaseUrl}/Alerts`, accept: 'application/json' },
+        { url: `${this.bkkApiBaseUrl}/alerts`, accept: 'application/json' }
+      ];
 
-      // Parse GTFS-realtime alerts
-      // Note: This is a simplified parser - full GTFS-realtime uses Protocol Buffers
-      // For production, consider using a GTFS-realtime library
+      let response: any = null;
+      let lastError: any = null;
+
+      // Try each endpoint
+      for (const endpoint of endpoints) {
+        try {
+          response = await axios.get(endpoint.url, {
+            params: {
+              key: this.apiKey
+            },
+            headers: {
+              'User-Agent': this.userAgent,
+              'Accept': endpoint.accept
+            },
+            timeout: 5000
+          });
+          
+          if (response.status === 200) {
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          continue;
+        }
+      }
+
+      if (!response || response.status !== 200) {
+        throw lastError || new Error('Failed to fetch alerts from any endpoint');
+      }
+
       const alerts: Array<{
         id: string;
         title: string;
@@ -499,34 +779,134 @@ export class PublicTransportService {
         endTime?: string;
       }> = [];
 
-      // If response is text format, try to parse it
-      if (typeof response.data === 'string') {
-        // Simple parsing - in production, use proper GTFS-realtime parser
-        // For now, return empty array and fall back to mock
-        console.log('GTFS-realtime text format received, parsing...');
+      // Enhanced response logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 BKK Alerts Response Type:', typeof response.data);
+        if (typeof response.data === 'string') {
+          console.log('🔍 BKK Alerts Text (first 500 chars):', response.data.substring(0, 500));
+        } else {
+          console.log('🔍 BKK Alerts JSON:', JSON.stringify(response.data, null, 2).substring(0, 500));
+        }
       }
 
-      // If response is JSON (some endpoints might return JSON)
-      if (response.data && Array.isArray(response.data.entity)) {
-        response.data.entity.forEach((entity: any) => {
-          if (entity.alert) {
-            const alert = entity.alert;
-            alerts.push({
-              id: entity.id || `alert_${Date.now()}`,
-              title: alert.headerText?.translation?.[0]?.text || 'Transport Alert',
-              description: alert.descriptionText?.translation?.[0]?.text || '',
-              severity: this.mapAlertSeverity(alert.severityLevel),
-              affectedRoutes: alert.informedEntity?.map((e: any) => e.routeId).filter(Boolean) || [],
-              startTime: alert.activePeriod?.[0]?.start ? new Date(alert.activePeriod[0].start * 1000).toISOString() : new Date().toISOString(),
-              endTime: alert.activePeriod?.[0]?.end ? new Date(alert.activePeriod[0].end * 1000).toISOString() : undefined
-            });
+      // Parse text format (simplified - full GTFS-realtime uses Protocol Buffers)
+      if (typeof response.data === 'string') {
+        // Try to extract basic information from text format
+        // This is a simplified parser - for production, use a proper GTFS-realtime library
+        const lines = response.data.split('\n');
+        let currentAlert: any = null;
+        
+        for (const line of lines) {
+          if (line.includes('header_text') || line.includes('title')) {
+            const match = line.match(/["']([^"']+)["']/);
+            if (match && !currentAlert) {
+              currentAlert = { title: match[1], description: '', severity: 'low' as const };
+            }
+          } else if (line.includes('description') && currentAlert) {
+            const match = line.match(/["']([^"']+)["']/);
+            if (match) {
+              currentAlert.description = match[1];
+            }
+          } else if (line.includes('severity') && currentAlert) {
+            const severityMatch = line.match(/\d+/);
+            if (severityMatch) {
+              currentAlert.severity = this.mapAlertSeverity(parseInt(severityMatch[0]));
+            }
           }
-        });
+        }
+        
+        // If we found any alerts in text format, add them
+        if (currentAlert) {
+          alerts.push({
+            id: `alert_${Date.now()}`,
+            title: currentAlert.title || 'Transport Alert',
+            description: currentAlert.description || '',
+            severity: currentAlert.severity,
+            affectedRoutes: [],
+            startTime: new Date().toISOString()
+          });
+        }
+      }
+
+      // Parse JSON format (GTFS-realtime JSON or custom format)
+      if (response.data && typeof response.data === 'object') {
+        // Try GTFS-realtime structure
+        if (Array.isArray(response.data.entity)) {
+          response.data.entity.forEach((entity: any) => {
+            if (entity.alert) {
+              const alert = entity.alert;
+              const headerText = alert.headerText?.translation?.[0]?.text || 
+                                alert.headerText?.text || 
+                                alert.title || 
+                                'Transport Alert';
+              const descriptionText = alert.descriptionText?.translation?.[0]?.text || 
+                                     alert.descriptionText?.text || 
+                                     alert.description || 
+                                     '';
+              
+              // Handle timestamp - check if seconds or milliseconds
+              const startRaw = alert.activePeriod?.[0]?.start;
+              const endRaw = alert.activePeriod?.[0]?.end;
+              const isStartSeconds = startRaw && startRaw < 10000000000;
+              const isEndSeconds = endRaw && endRaw < 10000000000;
+              
+              alerts.push({
+                id: entity.id || `alert_${Date.now()}_${Math.random()}`,
+                title: headerText,
+                description: descriptionText,
+                severity: this.mapAlertSeverity(alert.severityLevel || alert.severity || 1),
+                affectedRoutes: alert.informedEntity?.map((e: any) => e.routeId || e.route_id).filter(Boolean) || [],
+                startTime: startRaw ? new Date((isStartSeconds ? startRaw * 1000 : startRaw)).toISOString() : new Date().toISOString(),
+                endTime: endRaw ? new Date((isEndSeconds ? endRaw * 1000 : endRaw)).toISOString() : undefined
+              });
+            }
+          });
+        } 
+        // Try alternative JSON structure
+        else if (Array.isArray(response.data)) {
+          response.data.forEach((alert: any) => {
+            alerts.push({
+              id: alert.id || `alert_${Date.now()}_${Math.random()}`,
+              title: alert.title || alert.header || 'Transport Alert',
+              description: alert.description || alert.message || '',
+              severity: this.mapAlertSeverity(alert.severity || alert.severityLevel || 1),
+              affectedRoutes: alert.affectedRoutes || alert.routes || [],
+              startTime: alert.startTime || alert.start || new Date().toISOString(),
+              endTime: alert.endTime || alert.end
+            });
+          });
+        }
+        // Try nested structure
+        else if (response.data.alerts || response.data.data) {
+          const alertsData = response.data.alerts || response.data.data || [];
+          alertsData.forEach((alert: any) => {
+            alerts.push({
+              id: alert.id || `alert_${Date.now()}_${Math.random()}`,
+              title: alert.title || alert.header || 'Transport Alert',
+              description: alert.description || alert.message || '',
+              severity: this.mapAlertSeverity(alert.severity || alert.severityLevel || 1),
+              affectedRoutes: alert.affectedRoutes || alert.routes || [],
+              startTime: alert.startTime || alert.start || new Date().toISOString(),
+              endTime: alert.endTime || alert.end
+            });
+          });
+        }
       }
 
       return alerts;
-    } catch (error) {
-      console.error('Error fetching real BKK alerts:', error);
+    } catch (error: any) {
+      // Enhanced error logging
+      if (error.response) {
+        console.error('❌ BKK Alerts API Error Response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      } else if (error.request) {
+        console.error('❌ BKK Alerts API Network Error - No response received');
+      } else {
+        console.error('❌ BKK Alerts API Error:', error.message);
+      }
       throw error;
     }
   }

@@ -3,13 +3,15 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import OpenAI from 'openai';
+
+// Load environment variables FIRST, before importing services that depend on them
+dotenv.config();
+
+// Import services after environment variables are loaded
 import { publicTransportService } from './transport';
 import { sharedMobilityService } from './mobility';
 import { weatherService } from './weather';
 import { routingService } from './routing';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -429,6 +431,7 @@ const aiService = new AIService();
 
 // Routes
 app.get('/api/health', (req, res) => {
+  const openRouteKey = process.env.OPENROUTESERVICE_API_KEY;
   res.json({ 
     status: 'OK', 
     message: 'AI Smart City Backend is running',
@@ -443,7 +446,8 @@ app.get('/api/health', (req, res) => {
       weather: true,
       multiModalRouting: true,
       realTimeUpdates: true,
-      openRouteService: !!process.env.OPENROUTESERVICE_API_KEY,
+      openRouteService: !!openRouteKey,
+      openRouteServiceKeyLength: openRouteKey ? openRouteKey.length : 0,
       bkkApi: process.env.BKK_API_ENABLED === 'true',
       molBubiApi: process.env.MOL_BUBI_API_ENABLED === 'true'
     },
@@ -841,4 +845,11 @@ app.listen(PORT, () => {
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🗺️  Geospatial services enabled`);
   console.log(`🤖 AI services: ${openai ? 'OpenAI enabled' : 'Rule-based responses'}`);
+  console.log(`\n📋 API Status:`);
+  console.log(`   OpenRouteService: ${process.env.OPENROUTESERVICE_API_KEY ? '✅ Key loaded' : '❌ No key'}`);
+  console.log(`   BKK API: ${process.env.BKK_API_ENABLED === 'true' ? '✅ Enabled' : '⚠️ Disabled'}`);
+  console.log(`   MOL Bubi: ${process.env.MOL_BUBI_API_ENABLED === 'true' ? '✅ Enabled' : '⚠️ Disabled'}`);
+  if (process.env.OPENROUTESERVICE_API_KEY) {
+    console.log(`   💡 OpenRouteService key length: ${process.env.OPENROUTESERVICE_API_KEY.length} chars`);
+  }
 });

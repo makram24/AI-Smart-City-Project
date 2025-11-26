@@ -47,8 +47,9 @@ export class SharedMobilityService {
 
     // Fallback to mock data
     try {
-      // Mock MOL Bubi data for Budapest
+      // Mock MOL Bubi data for Budapest (expanded coverage)
       const mockStations: BikeStation[] = [
+        // City Center
         {
           id: 'station_001',
           name: 'Deák Ferenc tér',
@@ -89,6 +90,7 @@ export class SharedMobilityService {
           status: 'active',
           lastUpdated: new Date().toISOString()
         },
+        // Buda Side
         {
           id: 'station_005',
           name: 'Széll Kálmán tér',
@@ -125,6 +127,98 @@ export class SharedMobilityService {
           position: [47.5179, 19.0102],
           availableBikes: 4,
           availableDocks: 16,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        // Northern Budapest (near user location)
+        {
+          id: 'station_009',
+          name: 'Árpád híd M',
+          position: [47.5340, 19.0550],
+          availableBikes: 10,
+          availableDocks: 10,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_010',
+          name: 'Újpest-központ M',
+          position: [47.5500, 19.0800],
+          availableBikes: 7,
+          availableDocks: 13,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_011',
+          name: 'Újpest-városkapu M',
+          position: [47.5450, 19.0700],
+          availableBikes: 5,
+          availableDocks: 15,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_012',
+          name: 'Gyöngyösi utca M',
+          position: [47.5400, 19.0600],
+          availableBikes: 9,
+          availableDocks: 11,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_013',
+          name: 'Szent István út',
+          position: [47.5480, 19.0450],
+          availableBikes: 6,
+          availableDocks: 14,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_014',
+          name: 'Rákospalota-Újpest',
+          position: [47.5550, 19.0900],
+          availableBikes: 11,
+          availableDocks: 9,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        // Additional central locations
+        {
+          id: 'station_015',
+          name: 'Nyugati pályaudvar M',
+          position: [47.5100, 19.0570],
+          availableBikes: 14,
+          availableDocks: 6,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_016',
+          name: 'Oktogon M',
+          position: [47.5050, 19.0600],
+          availableBikes: 8,
+          availableDocks: 12,
+          totalDocks: 20,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: 'station_017',
+          name: 'Hősök tere M',
+          position: [47.5150, 19.0780],
+          availableBikes: 13,
+          availableDocks: 7,
           totalDocks: 20,
           status: 'active',
           lastUpdated: new Date().toISOString()
