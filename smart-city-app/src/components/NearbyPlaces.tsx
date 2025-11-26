@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
+import { ChevronDown, ChevronUp, MapPin, Navigation } from "lucide-react";
 import { apiService, Place } from "@/lib/api";
 
 interface NearbyPlacesProps {
   userLocation: { lat: number; lng: number } | null;
+  onRouteRequest?: (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => void;
 }
 
 const categoryOrder = ['pharmacy', 'hospital', 'restaurant', 'cafe', 'bank', 'atm', 'clinic', 'fuel', 'parking', 'hotel'];
@@ -23,7 +24,7 @@ const categoryLabels: { [key: string]: string } = {
   place: 'Other Places'
 };
 
-export default function NearbyPlaces({ userLocation }: NearbyPlacesProps) {
+export default function NearbyPlaces({ userLocation, onRouteRequest }: NearbyPlacesProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
@@ -112,26 +113,42 @@ export default function NearbyPlaces({ userLocation }: NearbyPlacesProps) {
                       {categoryLabels[category] || category}
                     </h4>
                     <div className="space-y-1">
-                      {categoryPlaces.slice(0, 10).map((place) => (
-                        <div
-                          key={place.id}
-                          className="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-900 truncate">
-                              {place.name}
-                            </div>
-                            {place.description && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {place.description}
+                      {categoryPlaces.slice(0, 10).map((place) => {
+                        const handlePlaceClick = () => {
+                          if (onRouteRequest && place.position) {
+                            // Convert position [lat, lng] to "lat,lng" string format
+                            const destination = `${place.position[0]},${place.position[1]}`;
+                            console.log(`🗺️ Requesting route to ${place.name} at ${destination}`);
+                            onRouteRequest('walking', destination);
+                          }
+                        };
+                        
+                        return (
+                          <div
+                            key={place.id}
+                            onClick={handlePlaceClick}
+                            className="flex items-center justify-between p-2 hover:bg-blue-50 rounded cursor-pointer transition-colors border border-transparent hover:border-blue-200 group"
+                            title={`Click to get directions to ${place.name}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600">
+                                  {place.name}
+                                </div>
+                                <Navigation className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </div>
-                            )}
+                              {place.description && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  {place.description}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                              {place.distance}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-400 ml-2 flex-shrink-0">
-                            {place.distance}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {categoryPlaces.length > 10 && (
                         <div className="text-xs text-gray-400 px-2 py-1">
                           +{categoryPlaces.length - 10} more

@@ -13,7 +13,10 @@ import {
   AlertTriangle,
   Cloud,
   CloudRain,
-  Sun
+  Sun,
+  ChevronDown,
+  ChevronUp,
+  Navigation
 } from "lucide-react";
 import { apiService, TransportStop, BikeStation, WeatherData, WeatherContext } from "@/lib/api";
 import NearbyPlaces from "./NearbyPlaces";
@@ -34,6 +37,7 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
   const [selectedMode, setSelectedMode] = useState<'walking' | 'cycling' | 'public_transport'>('walking');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isTransportExpanded, setIsTransportExpanded] = useState(true);
 
   useEffect(() => {
     if (userLocation) {
@@ -178,7 +182,17 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
       {/* Transport Stops */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Nearby Transport</h3>
+          <button
+            onClick={() => setIsTransportExpanded(!isTransportExpanded)}
+            className="w-full flex items-center justify-between mb-3 hover:bg-gray-50 -mx-2 px-2 py-1 rounded transition-colors"
+          >
+            <h3 className="text-sm font-medium text-gray-900">Nearby Transport</h3>
+            {isTransportExpanded ? (
+              <ChevronUp className="w-4 h-4 text-gray-600" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-600" />
+            )}
+          </button>
           
           {error && (
             <div className="text-center text-sm text-red-500 mb-3">{error}</div>
@@ -189,29 +203,49 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
             Debug: Stops: {transportStops.length}, Bikes: {bikeStations.length}, Weather: {weather ? 'Yes' : 'No'}
           </div>
           
-          {loading ? (
-            <div className="text-center text-sm text-gray-500">Loading transport data...</div>
-          ) : !userLocation ? (
-            <div className="text-center text-sm text-gray-500">Location not available</div>
-          ) : (
-            <div className="space-y-3">
+          {isTransportExpanded && (
+            <>
+              {loading ? (
+                <div className="text-center text-sm text-gray-500">Loading transport data...</div>
+              ) : !userLocation ? (
+                <div className="text-center text-sm text-gray-500">Location not available</div>
+              ) : (
+                <div className="space-y-3">
               {/* Metro Stops */}
               {transportStops.filter(stop => stop.type === 'metro').length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Metro Stations</h4>
-                  {transportStops.filter(stop => stop.type === 'metro').slice(0, 5).map((stop) => (
-                    <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
-                      <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
-                        <Train className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{stop.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
+                  {transportStops.filter(stop => stop.type === 'metro').slice(0, 5).map((stop) => {
+                    const handleStopClick = () => {
+                      if (onRouteRequest && stop.position) {
+                        const destination = `${stop.position[0]},${stop.position[1]}`;
+                        console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
+                        onRouteRequest('walking', destination);
+                      }
+                    };
+                    
+                    return (
+                      <div 
+                        key={stop.id} 
+                        onClick={handleStopClick}
+                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2 hover:bg-blue-50 cursor-pointer transition-colors border border-transparent hover:border-blue-200 group"
+                        title={`Click to get directions to ${stop.name}`}
+                      >
+                        <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
+                          <Train className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium group-hover:text-blue-600">{stop.name}</div>
+                            <Navigation className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -219,19 +253,37 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
               {transportStops.filter(stop => stop.type === 'tram').length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Tram Stops</h4>
-                  {transportStops.filter(stop => stop.type === 'tram').slice(0, 5).map((stop) => (
-                    <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                        <Train className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{stop.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
+                  {transportStops.filter(stop => stop.type === 'tram').slice(0, 5).map((stop) => {
+                    const handleStopClick = () => {
+                      if (onRouteRequest && stop.position) {
+                        const destination = `${stop.position[0]},${stop.position[1]}`;
+                        console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
+                        onRouteRequest('walking', destination);
+                      }
+                    };
+                    
+                    return (
+                      <div 
+                        key={stop.id} 
+                        onClick={handleStopClick}
+                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2 hover:bg-blue-50 cursor-pointer transition-colors border border-transparent hover:border-blue-200 group"
+                        title={`Click to get directions to ${stop.name}`}
+                      >
+                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                          <Train className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium group-hover:text-blue-600">{stop.name}</div>
+                            <Navigation className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -239,19 +291,37 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
               {transportStops.filter(stop => stop.type === 'bus').length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Bus Stops</h4>
-                  {transportStops.filter(stop => stop.type === 'bus').slice(0, 5).map((stop) => (
-                    <div key={stop.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
-                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                        <Bus className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{stop.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'route' : 'routes'}
+                  {transportStops.filter(stop => stop.type === 'bus').slice(0, 5).map((stop) => {
+                    const handleStopClick = () => {
+                      if (onRouteRequest && stop.position) {
+                        const destination = `${stop.position[0]},${stop.position[1]}`;
+                        console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
+                        onRouteRequest('walking', destination);
+                      }
+                    };
+                    
+                    return (
+                      <div 
+                        key={stop.id} 
+                        onClick={handleStopClick}
+                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2 hover:bg-blue-50 cursor-pointer transition-colors border border-transparent hover:border-blue-200 group"
+                        title={`Click to get directions to ${stop.name}`}
+                      >
+                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                          <Bus className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium group-hover:text-blue-600">{stop.name}</div>
+                            <Navigation className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'route' : 'routes'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -259,30 +329,64 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
               {bikeStations.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Bike Stations</h4>
-                  {bikeStations.slice(0, 5).map((station) => (
-                    <div key={station.stationId} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2">
-                      <div className="w-8 h-8 bg-violet-600 rounded-full flex items-center justify-center">
-                        <Bike className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{station.stationName}</div>
-                        <div className="text-xs text-gray-500">
-                          {station.availableBikes} bikes • {station.availableDocks} docks
+                  {bikeStations.slice(0, 5).map((station) => {
+                    const handleStationClick = () => {
+                      if (onRouteRequest) {
+                        // Try position first, then lat/lng, then fallback
+                        let destination: string | null = null;
+                        if (station.position) {
+                          destination = `${station.position[0]},${station.position[1]}`;
+                        } else if (station.lat !== undefined && station.lng !== undefined) {
+                          destination = `${station.lat},${station.lng}`;
+                        }
+                        
+                        if (destination) {
+                          console.log(`🗺️ Requesting route to ${station.stationName} at ${destination}`);
+                          onRouteRequest('walking', destination);
+                        } else {
+                          console.warn(`No coordinates available for bike station ${station.stationName}`);
+                        }
+                      }
+                    };
+                    
+                    return (
+                      <div 
+                        key={station.stationId} 
+                        onClick={handleStationClick}
+                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg mb-2 hover:bg-blue-50 cursor-pointer transition-colors border border-transparent hover:border-blue-200 group"
+                        title={`Click to get directions to ${station.stationName}`}
+                      >
+                        <div className="w-8 h-8 bg-violet-600 rounded-full flex items-center justify-center">
+                          <Bike className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium group-hover:text-blue-600">{station.stationName}</div>
+                            <Navigation className="w-3 h-3 text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {station.availableBikes} bikes • {station.availableDocks} docks
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {Math.round(station.distance)}m
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {Math.round(station.distance)}m
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
         
         {/* Nearby Places List */}
-        <NearbyPlaces userLocation={userLocation} />
+        <NearbyPlaces 
+          userLocation={userLocation} 
+          onRouteRequest={onRouteRequest}
+        />
       </div>
     </div>
   );
