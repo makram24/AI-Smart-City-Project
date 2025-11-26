@@ -32,24 +32,85 @@ class GeospatialService {
 
   async geocode(address: string): Promise<any> {
     try {
-      const response = await axios.get(`${this.nominatimBaseUrl}/search`, {
+      // ALWAYS search in Budapest, Hungary context
+      // First try with explicit Budapest context
+      let response = await axios.get(`${this.nominatimBaseUrl}/search`, {
         params: {
-          q: address,
+          q: address + ', Budapest, Hungary',
           format: 'json',
-          limit: 1,
+          limit: 10,
           countrycodes: 'hu',
-          addressdetails: 1
+          addressdetails: 1,
+          viewbox: '19.0,47.6,19.3,47.4', // Budapest city center bounding box [min_lng, max_lat, max_lng, min_lat]
+          bounded: 1
         },
         headers: {
           'User-Agent': 'AI-Smart-City-App/1.0'
         }
       });
 
+      // If no results, try with wider Hungary search but still prioritize Budapest
+      if (!response.data || response.data.length === 0) {
+        response = await axios.get(`${this.nominatimBaseUrl}/search`, {
+          params: {
+            q: address + ', Hungary',
+            format: 'json',
+            limit: 10,
+            countrycodes: 'hu',
+            addressdetails: 1
+          },
+          headers: {
+            'User-Agent': 'AI-Smart-City-App/1.0'
+          }
+        });
+      }
+
       if (response.data && response.data.length > 0) {
-        const result = response.data[0];
+        // Find the best match - MUST be in Budapest/Hungary
+        let result = null;
+        for (const item of response.data) {
+          const lat = parseFloat(item.lat);
+          const lng = parseFloat(item.lon);
+          const displayName = (item.display_name || '').toLowerCase();
+          
+          // Validate coordinates are in Budapest area (strict check)
+          const isInBudapest = lat >= 47.3 && lat <= 47.7 && lng >= 18.9 && lng <= 19.4;
+          const mentionsBudapest = displayName.includes('budapest') || displayName.includes('hungary');
+          
+          if (isInBudapest || mentionsBudapest) {
+            result = item;
+            break;
+          }
+        }
+        
+        // If no Budapest result found, take first result but validate coordinates
+        if (!result) {
+          result = response.data[0];
+          const lat = parseFloat(result.lat);
+          const lng = parseFloat(result.lon);
+          
+          // Reject if clearly outside Budapest
+          if (lat < 47.3 || lat > 47.7 || lng < 18.9 || lng > 19.4) {
+            console.error(`❌ Rejected geocoding result outside Budapest: [${lat}, ${lng}] for "${address}"`);
+            return null;
+          }
+        }
+
+        const lat = parseFloat(result.lat);
+        const lng = parseFloat(result.lon);
+        
+        console.log(`📍 Geocoded "${address}" to: ${result.display_name}`);
+        console.log(`   Coordinates: [${lat}, ${lng}]`);
+        
+        // Final validation - MUST be in Budapest area
+        if (lat < 47.3 || lat > 47.7 || lng < 18.9 || lng > 19.4) {
+          console.error(`❌ Invalid coordinates for Budapest: [${lat}, ${lng}] - REJECTING`);
+          return null;
+        }
+
         return {
-          lat: parseFloat(result.lat),
-          lng: parseFloat(result.lon),
+          lat: lat,
+          lng: lng,
           display_name: result.display_name
         };
       }
@@ -338,6 +399,14 @@ class AIService {
     route?: any;
   }> {
     try {
+      // ALWAYS use user's current location as the start point
+      // Ignore the 'from' parameter and always use userLocation
+      const startLat = userLocation.lat;
+      const startLng = userLocation.lng;
+      
+      console.log(`🗺️ Planning route from user's current location:`);
+      console.log(`   Start (User Location): [${startLat}, ${startLng}]`);
+      
       // Geocode the destination
       const toResult = await geospatialService.geocode(to);
       if (!toResult) {
@@ -347,9 +416,11 @@ class AIService {
         };
       }
 
-      // Get real route using OpenRouteService
+      console.log(`   Destination: [${toResult.lat}, ${toResult.lng}] (${toResult.display_name})`);
+
+      // Get real route using OpenRouteService - ALWAYS from user's current location
       const walkingRoute = await routingService.getWalkingRoute(
-        [userLocation.lat, userLocation.lng],
+        [startLat, startLng], // Always user's current location
         [toResult.lat, toResult.lng]
       );
 
@@ -358,21 +429,36 @@ class AIService {
         const duration = routingService.formatDuration(walkingRoute.duration);
         const firstInstructions = walkingRoute.instructions.slice(0, 3).join(' → ');
 
-        // Ensure geometry is in [lat, lng] format for frontend
-        // The routing service already returns [lat, lng], but let's ensure it's correct
+        // Validate and format geometry - ensure [lat, lng] format
         const formattedGeometry = walkingRoute.geometry.map((coord: number[]) => {
           if (Array.isArray(coord) && coord.length >= 2) {
-            // Ensure [lat, lng] format (Budapest lat ~47, lng ~19)
-            // If first value > second and first < 30, it's likely [lng, lat], swap it
-            if (coord[0] > coord[1] && coord[0] < 30 && coord[1] > 40) {
-              return [coord[1], coord[0]]; // Swap to [lat, lng]
+            let lat = coord[0];
+            let lng = coord[1];
+            
+            // Validate coordinates are reasonable for Budapest
+            // Budapest: lat ~47.5, lng ~19.0
+            // If coordinates seem swapped (lat < lng and lat < 30), swap them
+            if (lat < lng && lat < 30 && lng > 40) {
+              console.warn(`⚠️ Swapping coordinates: [${lat}, ${lng}] -> [${lng}, ${lat}]`);
+              [lat, lng] = [lng, lat];
             }
-            return [coord[0], coord[1]]; // Already [lat, lng]
+            
+            // Final validation - coordinates should be in Hungary/Budapest area
+            if (lat < 45 || lat > 49 || lng < 16 || lng > 23) {
+              console.error(`❌ Invalid coordinates for Budapest: [${lat}, ${lng}]`);
+            }
+            
+            return [lat, lng]; // Return as [lat, lng]
           }
           return coord;
         });
 
-        console.log(`🗺️ Returning route with ${formattedGeometry.length} coordinates`);
+        // Log first and last coordinates for debugging
+        if (formattedGeometry.length > 0) {
+          console.log(`✅ Route geometry: ${formattedGeometry.length} points`);
+          console.log(`   First: [${formattedGeometry[0][0]}, ${formattedGeometry[0][1]}]`);
+          console.log(`   Last: [${formattedGeometry[formattedGeometry.length - 1][0]}, ${formattedGeometry[formattedGeometry.length - 1][1]}]`);
+        }
 
         return {
           text: `Here's the best route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
@@ -398,7 +484,7 @@ class AIService {
 
       // Fallback to simple distance calculation if routing fails
       const distance = geospatialService.calculateDistance(
-        userLocation.lat, userLocation.lng,
+        startLat, startLng, // Always user's current location
         toResult.lat, toResult.lng
       );
 
@@ -411,11 +497,11 @@ class AIService {
           type: 'destination'
         }],
         route: {
-          polyline: [[userLocation.lat, userLocation.lng], [toResult.lat, toResult.lng]],
+          polyline: [[startLat, startLng], [toResult.lat, toResult.lng]], // Always start from user location
           distance: `${distance.toFixed(1)} km`,
           duration: `${Math.round(distance * 12)} min`,
           steps: [
-            { instruction: 'Start from origin', distance: 'N/A', type: 'walking' },
+            { instruction: 'Start from your current location', distance: 'N/A', type: 'walking' },
             { instruction: 'Follow the route', distance: 'N/A', type: 'walking' },
             { instruction: `Arrive at ${toResult.display_name}`, distance: distance.toFixed(1) + ' km', type: 'walking' }
           ],
@@ -706,8 +792,18 @@ app.get('/api/routes', async (req, res) => {
       }
     } else {
       // Walking route using OpenRouteService or fallback
-      const fromCoords = from ? from.toString().split(',').map(Number) : [47.4979, 19.0402];
+      // 'from' should always be user's current location
+      const fromCoords = from.toString().split(',').map(Number);
       const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
+      
+      // Validate from coordinates
+      if (fromCoords.length !== 2 || isNaN(fromCoords[0]) || isNaN(fromCoords[1])) {
+        return res.status(400).json({ 
+          error: 'Invalid start location format. Expected: lat,lng' 
+        });
+      }
+      
+      console.log(`🗺️ Route request: From user location [${fromCoords[0]}, ${fromCoords[1]}] to [${toCoords[0]}, ${toCoords[1]}]`);
       
       const walkingRoute = await routingService.getWalkingRoute(
         [fromCoords[0], fromCoords[1]],

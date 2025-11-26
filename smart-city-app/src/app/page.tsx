@@ -121,19 +121,54 @@ export default function Home() {
           duration: aiResponse.route.duration
         });
         
+        // Log first few coordinates to debug
+        if (aiResponse.route.polyline && aiResponse.route.polyline.length > 0) {
+          console.log('   First coordinate:', aiResponse.route.polyline[0]);
+          console.log('   Last coordinate:', aiResponse.route.polyline[aiResponse.route.polyline.length - 1]);
+        }
+        
         // Ensure polyline is in correct format [lat, lng][]
+        const formattedPolyline = aiResponse.route.polyline?.map((coord: any) => {
+          if (Array.isArray(coord) && coord.length >= 2) {
+            let lat = coord[0];
+            let lng = coord[1];
+            
+            // Validate coordinates are in Budapest
+            if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
+              console.warn(`⚠️ Invalid coordinate in route: [${lat}, ${lng}]`);
+              // Try swapping
+              if (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5) {
+                console.warn(`   Swapping: [${lng}, ${lat}]`);
+                [lat, lng] = [lng, lat];
+              }
+            }
+            
+            return [lat, lng]; // Return as [lat, lng] for frontend
+          }
+          return coord;
+        }).filter((coord: number[]) => {
+          // Filter out invalid coordinates
+          if (Array.isArray(coord) && coord.length >= 2) {
+            const lat = coord[0];
+            const lng = coord[1];
+            return lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+          }
+          return false;
+        }) || [];
+        
         const formattedRoute = {
           ...aiResponse.route,
-          polyline: aiResponse.route.polyline?.map((coord: any) => {
-            if (Array.isArray(coord) && coord.length >= 2) {
-              return [coord[0], coord[1]]; // Keep as [lat, lng]
-            }
-            return coord;
-          }) || []
+          polyline: formattedPolyline
         };
         
+        console.log('✅ Route formatted:', {
+          originalLength: aiResponse.route.polyline?.length || 0,
+          formattedLength: formattedPolyline.length,
+          firstCoord: formattedPolyline[0],
+          lastCoord: formattedPolyline[formattedPolyline.length - 1]
+        });
+        
         setCurrentRoute(formattedRoute);
-        console.log('✅ Route set on map with', formattedRoute.polyline.length, 'coordinates');
       }
 
     } catch (error) {
@@ -249,11 +284,22 @@ export default function Home() {
   const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
     if (!userLocation) {
       console.warn('User location not available for route planning');
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'I need your current location to plan a route. Please allow location access and try again.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
       return;
     }
 
     setIsLoading(true);
     try {
+      // ALWAYS use user's current location as the start point
+      const startCoords = `${userLocation.lat},${userLocation.lng}`;
+      console.log(`🗺️ Planning route from user's current location: ${startCoords}`);
+      
       // Check if destination is coordinates or an address
       let destinationCoords = destination;
       const coordPattern = /^-?\d+\.?\d*,-?\d+\.?\d*$/;
@@ -270,8 +316,9 @@ export default function Home() {
         }
       }
 
+      // ALWAYS use user's current location as start point
       const route = await apiService.getRoute(
-        `${userLocation.lat},${userLocation.lng}`,
+        startCoords, // Always user's current location
         destinationCoords,
         mode
       );

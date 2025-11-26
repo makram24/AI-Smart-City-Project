@@ -187,8 +187,10 @@ export class RoutingService {
           if (route.geometry.type === 'LineString' && Array.isArray(route.geometry.coordinates)) {
             route.geometry.coordinates.forEach((coord: number[]) => {
               if (Array.isArray(coord) && coord.length >= 2) {
-                // OpenRouteService returns [lng, lat], convert to [lat, lng] for frontend
-                geometry.push([coord[1], coord[0]]);
+                // OpenRouteService returns [lng, lat] in GeoJSON format, convert to [lat, lng]
+                const lng = coord[0];
+                const lat = coord[1];
+                geometry.push([lat, lng]); // Store as [lat, lng]
               }
             });
           }
@@ -196,8 +198,10 @@ export class RoutingService {
           else if (Array.isArray(route.geometry.coordinates)) {
             route.geometry.coordinates.forEach((coord: number[]) => {
               if (Array.isArray(coord) && coord.length >= 2) {
-                // OpenRouteService returns [lng, lat], convert to [lat, lng]
-                geometry.push([coord[1], coord[0]]);
+                // OpenRouteService returns [lng, lat] in GeoJSON format, convert to [lat, lng]
+                const lng = coord[0];
+                const lat = coord[1];
+                geometry.push([lat, lng]); // Store as [lat, lng]
               }
             });
           }
@@ -235,9 +239,53 @@ export class RoutingService {
           });
         }
 
+        // Validate and fix coordinate format
+        // Ensure all coordinates are in [lat, lng] format (Budapest: lat ~47.5, lng ~19.0)
+        const validatedGeometry = geometry.map((coord: number[]) => {
+          if (Array.isArray(coord) && coord.length >= 2) {
+            let lat = coord[0];
+            let lng = coord[1];
+            
+            // STRICT validation for Budapest coordinates
+            // Budapest: lat 47.0-48.0, lng 18.5-19.5
+            // If coordinates are swapped (lat < lng and lat < 20), swap them
+            if (lat < lng && lat < 20 && lng > 40) {
+              console.warn(`⚠️ Swapping coordinates: [${lat}, ${lng}] -> [${lng}, ${lat}]`);
+              [lat, lng] = [lng, lat];
+            }
+            
+            // STRICT validation - coordinates MUST be in Budapest area
+            if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
+              console.error(`❌ INVALID coordinates for Budapest: [${lat}, ${lng}] - This will cause wrong location!`);
+              // Try swapping as last resort
+              if (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5) {
+                console.warn(`   Attempting swap: [${lng}, ${lat}]`);
+                return [lng, lat]; // Swap if swapped coordinates are valid
+              }
+            }
+            
+            return [lat, lng]; // Return as [lat, lng]
+          }
+          return coord;
+        }).filter((coord: number[]) => {
+          // Filter out invalid coordinates - ONLY keep Budapest coordinates
+          if (Array.isArray(coord) && coord.length >= 2) {
+            const lat = coord[0];
+            const lng = coord[1];
+            const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+            if (!isValid) {
+              console.error(`❌ Filtering out invalid coordinate: [${lat}, ${lng}]`);
+            }
+            return isValid;
+          }
+          return false;
+        });
+
         // Remove duplicates and ensure minimum 2 points
-        const uniqueGeometry = geometry.filter((coord, index, self) => 
-          index === self.findIndex(c => c[0] === coord[0] && c[1] === coord[1])
+        const uniqueGeometry = validatedGeometry.filter((coord, index, self) => 
+          index === self.findIndex(c => 
+            Math.abs(c[0] - coord[0]) < 0.0001 && Math.abs(c[1] - coord[1]) < 0.0001
+          )
         );
 
         // Final fallback: use start and end points
@@ -261,6 +309,13 @@ export class RoutingService {
           if (endDist > 0.01) {
             uniqueGeometry.push(to);
           }
+        }
+
+        // Log final geometry for debugging
+        if (uniqueGeometry.length > 0) {
+          console.log(`✅ Final route geometry: ${uniqueGeometry.length} points`);
+          console.log(`   First: [${uniqueGeometry[0][0]}, ${uniqueGeometry[0][1]}]`);
+          console.log(`   Last: [${uniqueGeometry[uniqueGeometry.length - 1][0]}, ${uniqueGeometry[uniqueGeometry.length - 1][1]}]`);
         }
 
         return {

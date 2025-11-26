@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
@@ -172,7 +172,55 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
   };
 
   // Convert polyline coordinates for Leaflet
-  const routeCoordinates = route?.polyline?.map(coord => [coord[1], coord[0]] as [number, number]) || [];
+  // Route prop receives [lat, lng] format, Leaflet needs [lng, lat]
+  const routeCoordinates = useMemo(() => {
+    if (!route?.polyline || !Array.isArray(route.polyline)) {
+      return [];
+    }
+    
+    console.log(`🗺️ Converting ${route.polyline.length} route coordinates for map display`);
+    
+    const converted = route.polyline.map((coord: number[]) => {
+      if (Array.isArray(coord) && coord.length >= 2) {
+        // Route prop should have [lat, lng] format
+        let lat = coord[0];
+        let lng = coord[1];
+        
+        // Validate coordinates are in Budapest
+        if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
+          console.warn(`⚠️ Invalid coordinate: [${lat}, ${lng}]`);
+          // Try swapping if coordinates seem reversed
+          if (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5) {
+            console.warn(`   Swapping: [${lng}, ${lat}]`);
+            [lat, lng] = [lng, lat];
+          } else {
+            console.error(`   Coordinate outside Budapest - skipping`);
+            return null;
+          }
+        }
+        
+        // Convert to Leaflet format: [lng, lat]
+        return [lng, lat] as [number, number];
+      }
+      return null;
+    }).filter((coord): coord is [number, number] => {
+      // Filter out nulls and validate
+      if (!coord) return false;
+      const lng = coord[0];
+      const lat = coord[1];
+      return lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+    });
+    
+    if (converted.length > 0) {
+      console.log(`✅ Converted ${converted.length} valid coordinates`);
+      console.log(`   First: [${converted[0][0]}, ${converted[0][1]}] (lng, lat)`);
+      console.log(`   Last: [${converted[converted.length - 1][0]}, ${converted[converted.length - 1][1]}] (lng, lat)`);
+    } else {
+      console.error(`❌ No valid coordinates after conversion!`);
+    }
+    
+    return converted;
+  }, [route?.polyline]);
 
   if (!isClient) {
     return (
