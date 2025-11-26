@@ -56,11 +56,24 @@ export default function Home() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
-          setUserLocation({ lat: latitude, lng: longitude });
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          
+          console.log(`📍 Raw geolocation: latitude=${latitude}, longitude=${longitude}`);
+          
+          // Validate coordinates are in Budapest
+          if (latitude >= 47.0 && latitude <= 48.0 && longitude >= 18.5 && longitude <= 19.5) {
+            setUserLocation({ lat: latitude, lng: longitude });
+            console.log(`✅ User location set: lat=${latitude}, lng=${longitude}`);
+            console.log(`   Will pass to Map as center: [${latitude}, ${longitude}] (lat, lng for Leaflet)`);
+          } else {
+            console.error(`❌ User location outside Budapest: lat=${latitude}, lng=${longitude} - Using Budapest center`);
+            setUserLocation({ lat: 47.4979, lng: 19.0402 });
+          }
         },
         (error) => {
           console.warn("Could not get user location:", error);
+          setUserLocation({ lat: 47.4979, lng: 19.0402 });
         }
       );
     }
@@ -373,7 +386,7 @@ export default function Home() {
       {/* Map Section - Left Side */}
       <div className="flex-1 h-full">
         <Map 
-          center={userLocation ? [userLocation.lat, userLocation.lng] : [47.4979, 19.0402]} // Budapest coordinates
+          center={userLocation ? [userLocation.lat, userLocation.lng] : [47.4979, 19.0402]} // Leaflet format: [lat, lng]
           zoom={13}
           markers={mapMarkers}
           route={currentRoute || undefined}

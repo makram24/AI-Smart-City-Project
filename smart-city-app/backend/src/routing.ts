@@ -241,44 +241,46 @@ export class RoutingService {
 
         // Validate and fix coordinate format
         // Ensure all coordinates are in [lat, lng] format (Budapest: lat ~47.5, lng ~19.0)
-        const validatedGeometry = geometry.map((coord: number[]) => {
+        const validatedGeometry = geometry.map((coord: number[], index: number) => {
           if (Array.isArray(coord) && coord.length >= 2) {
             let lat = coord[0];
             let lng = coord[1];
             
             // STRICT validation for Budapest coordinates
             // Budapest: lat 47.0-48.0, lng 18.5-19.5
-            // If coordinates are swapped (lat < lng and lat < 20), swap them
-            if (lat < lng && lat < 20 && lng > 40) {
-              console.warn(`⚠️ Swapping coordinates: [${lat}, ${lng}] -> [${lng}, ${lat}]`);
+            const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+            const isLikelySwapped = !isValid && (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5);
+            
+            if (isLikelySwapped) {
+              console.warn(`⚠️ Coordinate ${index} appears swapped: [${lat}, ${lng}] -> [${lng}, ${lat}]`);
               [lat, lng] = [lng, lat];
+            } else if (!isValid) {
+              console.error(`❌ INVALID coordinate ${index} for Budapest: [${lat}, ${lng}] - REJECTING`);
+              return null; // Return null to filter out
             }
             
-            // STRICT validation - coordinates MUST be in Budapest area
+            // Final check after potential swap
             if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
-              console.error(`❌ INVALID coordinates for Budapest: [${lat}, ${lng}] - This will cause wrong location!`);
-              // Try swapping as last resort
-              if (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5) {
-                console.warn(`   Attempting swap: [${lng}, ${lat}]`);
-                return [lng, lat]; // Swap if swapped coordinates are valid
-              }
+              console.error(`❌ Coordinate ${index} still invalid after swap: [${lat}, ${lng}] - REJECTING`);
+              return null;
             }
             
             return [lat, lng]; // Return as [lat, lng]
           }
-          return coord;
-        }).filter((coord: number[]) => {
-          // Filter out invalid coordinates - ONLY keep Budapest coordinates
-          if (Array.isArray(coord) && coord.length >= 2) {
-            const lat = coord[0];
-            const lng = coord[1];
-            const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
-            if (!isValid) {
-              console.error(`❌ Filtering out invalid coordinate: [${lat}, ${lng}]`);
-            }
-            return isValid;
+          console.error(`❌ Invalid coordinate format at index ${index}:`, coord);
+          return null;
+        }).filter((coord: number[] | null): coord is number[] => {
+          // Filter out nulls and validate one more time
+          if (!coord || !Array.isArray(coord) || coord.length < 2) {
+            return false;
           }
-          return false;
+          const lat = coord[0];
+          const lng = coord[1];
+          const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+          if (!isValid) {
+            console.error(`❌ Filtered coordinate still invalid: [${lat}, ${lng}]`);
+          }
+          return isValid;
         });
 
         // Remove duplicates and ensure minimum 2 points

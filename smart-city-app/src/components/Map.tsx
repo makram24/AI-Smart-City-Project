@@ -100,7 +100,7 @@ function MapController({ center, zoom, routeCoordinates }: {
 
 export default function Map({ center, zoom = 13, markers = [], route, filters }: MapProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([47.4979, 19.0402]); // Budapest coordinates
+  const [mapCenter, setMapCenter] = useState<[number, number]>([47.4979, 19.0402]); // Budapest coordinates [lat, lng]
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -108,20 +108,43 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
   }, []);
 
   useEffect(() => {
-    // Get user's current location
-    if (isClient && navigator.geolocation) {
+    // Get user's current location (only if center is not provided from parent)
+    // The parent (page.tsx) should handle user location and pass it as center prop
+    if (isClient && !center && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          setUserLocation([latitude, longitude]);
-          if (!center) {
+          
+          // Validate coordinates are in Budapest
+          if (latitude >= 47.0 && latitude <= 48.0 && longitude >= 18.5 && longitude <= 19.5) {
+            // Leaflet uses [lat, lng] format
+            setUserLocation([latitude, longitude]);
             setMapCenter([latitude, longitude]);
+            console.log(`✅ User location set in Map component: [${latitude}, ${longitude}] (lat, lng)`);
+          } else {
+            console.error(`❌ User location outside Budapest: [${latitude}, ${longitude}] - Using Budapest center`);
+            // Fallback to Budapest center if location is invalid
+            const budapestCenter: [number, number] = [47.4979, 19.0402]; // [lat, lng]
+            setUserLocation(budapestCenter);
+            setMapCenter(budapestCenter);
           }
         },
         (error) => {
           console.warn("Could not get user location:", error);
+          // Fallback to Budapest center
+          const budapestCenter: [number, number] = [47.4979, 19.0402]; // [lat, lng]
+          setUserLocation(budapestCenter);
+          setMapCenter(budapestCenter);
         }
       );
+    } else if (center) {
+      // If center is provided from parent, use it and extract user location from it
+      // Center is in [lat, lng] format for Leaflet
+      setMapCenter(center);
+      setUserLocation(center); // Use center as user location for marker display
+      console.log(`✅ Using center from parent: [${center[0]}, ${center[1]}] (lat, lng)`);
+      console.log(`   This means: Latitude = ${center[0]}, Longitude = ${center[1]}`);
+      console.log(`   Marker will be positioned at: [${center[0]}, ${center[1]}] (Leaflet format: [lat, lng])`);
     }
   }, [center, isClient]);
 
@@ -144,14 +167,105 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
     return deg * (Math.PI/180);
   };
 
-  // Filter markers based on filters
+  // Convert polyline coordinates for Leaflet FIRST (before filteredMarkers uses it)
+  // Route prop receives [lat, lng] format from backend, Leaflet also uses [lat, lng]
+  const routeCoordinates = useMemo(() => {
+    if (!route?.polyline || !Array.isArray(route.polyline)) {
+      return [];
+    }
+    
+    console.log(`🗺️ Converting ${route.polyline.length} route coordinates for map display`);
+    console.log(`   Raw first coordinate: [${route.polyline[0]?.[0]}, ${route.polyline[0]?.[1]}]`);
+    
+    const converted = route.polyline.map((coord: number[], index: number) => {
+      if (Array.isArray(coord) && coord.length >= 2) {
+        // Route prop should have [lat, lng] format from backend
+        let lat = coord[0];
+        let lng = coord[1];
+        
+        // STRICT validation - coordinates MUST be in Budapest
+        // If coordinates are clearly outside Budapest, try swapping
+        const isLikelySwapped = (lat < 47.0 || lat > 48.0) && (lng >= 47.0 && lng <= 48.0);
+        const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+        
+        if (!isValid && isLikelySwapped) {
+          console.warn(`⚠️ Coordinate ${index} appears swapped: [${lat}, ${lng}] -> [${lng}, ${lat}]`);
+          [lat, lng] = [lng, lat];
+        }
+        
+        // Final validation - REJECT if still not in Budapest
+        if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
+          console.error(`❌ Coordinate ${index} outside Budapest: [${lat}, ${lng}] - REJECTING`);
+          return null;
+        }
+        
+        // Leaflet uses [lat, lng] format - already correct from backend
+        return [lat, lng] as [number, number];
+      }
+      console.error(`❌ Invalid coordinate format at index ${index}:`, coord);
+      return null;
+    }).filter((coord): coord is [number, number] => {
+      // Filter out nulls and validate one more time
+      if (!coord) return false;
+      const lat = coord[0];
+      const lng = coord[1];
+      const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
+      if (!isValid) {
+        console.error(`❌ Filtered coordinate still invalid: [${lat}, ${lng}] (lat, lng)`);
+      }
+      return isValid;
+    });
+    
+    if (converted.length > 0) {
+      console.log(`✅ Converted ${converted.length} valid coordinates (filtered ${route.polyline.length - converted.length} invalid)`);
+      console.log(`   First: [${converted[0][0]}, ${converted[0][1]}] (lat, lng)`);
+      console.log(`   Last: [${converted[converted.length - 1][0]}, ${converted[converted.length - 1][1]}] (lat, lng)`);
+    } else {
+      console.error(`❌ No valid coordinates after conversion! All ${route.polyline.length} coordinates were invalid.`);
+    }
+    
+    return converted;
+  }, [route?.polyline]);
+
+  // Filter markers based on filters AND validate coordinates (after routeCoordinates is defined)
   const filteredMarkers = markers.filter(marker => {
+    // STRICT: First validate marker is in Budapest
+    const lat = marker.position[0];
+    const lng = marker.position[1];
+    
+    if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
+      console.warn(`⚠️ Filtering out marker outside Budapest: [${lat}, ${lng}] - ${marker.title}`);
+      return false;
+    }
+    
+    // Don't show markers that are duplicates of route start/end
+    if (routeCoordinates.length > 0) {
+      const startCoord = routeCoordinates[0];
+      const endCoord = routeCoordinates[routeCoordinates.length - 1];
+      // routeCoordinates use [lat, lng], markers also use [lat, lng]
+      const startLat = startCoord[0];
+      const startLng = startCoord[1];
+      const endLat = endCoord[0];
+      const endLng = endCoord[1];
+      
+      // Check if marker is too close to route start or end (within 50 meters)
+      const isNearStart = Math.abs(lat - startLat) < 0.0005 && Math.abs(lng - startLng) < 0.0005;
+      const isNearEnd = Math.abs(lat - endLat) < 0.0005 && Math.abs(lng - endLng) < 0.0005;
+      
+      if (isNearStart || isNearEnd) {
+        console.log(`⚠️ Filtering out duplicate marker near route ${isNearStart ? 'start' : 'end'}: ${marker.title}`);
+        return false;
+      }
+    }
+    
+    // Apply category filters
     if (filters?.categories && filters.categories.length > 0) {
       if (!filters.categories.includes(marker.type || 'default')) {
         return false;
       }
     }
     
+    // Apply distance filters
     if (filters?.maxDistance && userLocation) {
       const distance = calculateDistance(
         userLocation[0], userLocation[1],
@@ -170,57 +284,6 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
     if (!type) return icons.default;
     return icons[type as keyof typeof icons] || icons.default;
   };
-
-  // Convert polyline coordinates for Leaflet
-  // Route prop receives [lat, lng] format, Leaflet needs [lng, lat]
-  const routeCoordinates = useMemo(() => {
-    if (!route?.polyline || !Array.isArray(route.polyline)) {
-      return [];
-    }
-    
-    console.log(`🗺️ Converting ${route.polyline.length} route coordinates for map display`);
-    
-    const converted = route.polyline.map((coord: number[]) => {
-      if (Array.isArray(coord) && coord.length >= 2) {
-        // Route prop should have [lat, lng] format
-        let lat = coord[0];
-        let lng = coord[1];
-        
-        // Validate coordinates are in Budapest
-        if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
-          console.warn(`⚠️ Invalid coordinate: [${lat}, ${lng}]`);
-          // Try swapping if coordinates seem reversed
-          if (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5) {
-            console.warn(`   Swapping: [${lng}, ${lat}]`);
-            [lat, lng] = [lng, lat];
-          } else {
-            console.error(`   Coordinate outside Budapest - skipping`);
-            return null;
-          }
-        }
-        
-        // Convert to Leaflet format: [lng, lat]
-        return [lng, lat] as [number, number];
-      }
-      return null;
-    }).filter((coord): coord is [number, number] => {
-      // Filter out nulls and validate
-      if (!coord) return false;
-      const lng = coord[0];
-      const lat = coord[1];
-      return lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
-    });
-    
-    if (converted.length > 0) {
-      console.log(`✅ Converted ${converted.length} valid coordinates`);
-      console.log(`   First: [${converted[0][0]}, ${converted[0][1]}] (lng, lat)`);
-      console.log(`   Last: [${converted[converted.length - 1][0]}, ${converted[converted.length - 1][1]}] (lng, lat)`);
-    } else {
-      console.error(`❌ No valid coordinates after conversion!`);
-    }
-    
-    return converted;
-  }, [route?.polyline]);
 
   if (!isClient) {
     return (
@@ -258,45 +321,95 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
               opacity={0.8}
               smoothFactor={1}
             />
-            {/* Start marker */}
-            {routeCoordinates.length > 0 && (
-              <Marker position={routeCoordinates[0]} icon={icons.user}>
-                <Popup>
-                  <div className="text-center">
-                    <strong>Route Start</strong>
-                    <br />
-                    <small>Your location</small>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-            {/* End marker */}
-            {routeCoordinates.length > 1 && (
-              <Marker position={routeCoordinates[routeCoordinates.length - 1]} icon={icons.destination}>
-                <Popup>
-                  <div className="text-center">
-                    <strong>Destination</strong>
-                    <br />
-                    <small>{route?.distance || 'N/A'} • {route?.duration || 'N/A'}</small>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
+            {/* Start marker - ONLY if coordinate is valid and in Budapest */}
+            {routeCoordinates.length > 0 && (() => {
+              const startCoord = routeCoordinates[0];
+              // Validate start coordinate is in Budapest (Leaflet format: [lat, lng])
+              const startLat = startCoord[0];
+              const startLng = startCoord[1];
+              
+              // STRICT validation - must be in Budapest
+              if (startLat >= 47.0 && startLat <= 48.0 && startLng >= 18.5 && startLng <= 19.5) {
+                console.log(`✅ Route start marker: [${startLat}, ${startLng}] (valid)`);
+                return (
+                  <Marker key="route-start" position={startCoord} icon={icons.user}>
+                    <Popup>
+                      <div className="text-center">
+                        <strong>Route Start</strong>
+                        <br />
+                        <small>Your location</small>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              } else {
+                console.error(`❌ Route start coordinate invalid: [${startLat}, ${startLng}] - NOT displaying marker`);
+                return null;
+              }
+            })()}
+            {/* End marker - ONLY if coordinate is valid and in Budapest */}
+            {routeCoordinates.length > 1 && (() => {
+              const endCoord = routeCoordinates[routeCoordinates.length - 1];
+              // Validate end coordinate is in Budapest (Leaflet format: [lat, lng])
+              const endLat = endCoord[0];
+              const endLng = endCoord[1];
+              
+              // STRICT validation - must be in Budapest
+              if (endLat >= 47.0 && endLat <= 48.0 && endLng >= 18.5 && endLng <= 19.5) {
+                console.log(`✅ Route end marker: [${endLat}, ${endLng}] (valid)`);
+                return (
+                  <Marker key="route-end" position={endCoord} icon={icons.destination}>
+                    <Popup>
+                      <div className="text-center">
+                        <strong>Destination</strong>
+                        <br />
+                        <small>{route?.distance || 'N/A'} • {route?.duration || 'N/A'}</small>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              } else {
+                console.error(`❌ Route end coordinate invalid: [${endLat}, ${endLng}] - NOT displaying marker`);
+                return null;
+              }
+            })()}
           </>
         )}
         
-        {/* User location marker */}
-        {userLocation && (
-          <Marker position={userLocation} icon={icons.user}>
-            <Popup>
-              <div className="text-center">
-                <strong>Your Location</strong>
-                <br />
-                <small>Lat: {userLocation[0].toFixed(4)}, Lng: {userLocation[1].toFixed(4)}</small>
-              </div>
-            </Popup>
-          </Marker>
-        )}
+        {/* User location marker - only show if no route (to avoid duplicate with route start) */}
+        {userLocation && routeCoordinates.length === 0 && (() => {
+          // userLocation is in [lat, lng] format for Leaflet (from center prop)
+          const lat = userLocation[0]; // First element is latitude
+          const lng = userLocation[1]; // Second element is longitude
+          
+          console.log(`📍 User location marker - Raw array: [${userLocation[0]}, ${userLocation[1]}]`);
+          console.log(`   Interpreted as: Latitude=${lat}, Longitude=${lng}`);
+          
+          // Validate user location is in Budapest
+          if (lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5) {
+            // userLocation is already in [lat, lng] format, use it directly
+            console.log(`✅ Displaying marker at position: [${lat}, ${lng}] (Leaflet [lat, lng] format)`);
+            console.log(`   This is: Latitude ${lat.toFixed(7)}, Longitude ${lng.toFixed(7)}`);
+            
+            return (
+              <Marker position={userLocation} icon={icons.user}>
+                <Popup>
+                  <div className="text-center">
+                    <strong>Your Location</strong>
+                    <br />
+                    <small>Latitude: {lat.toFixed(7)}</small>
+                    <br />
+                    <small>Longitude: {lng.toFixed(7)}</small>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          } else {
+            console.error(`❌ User location invalid: Lat: ${lat}, Lng: ${lng} - Not displaying marker`);
+          }
+          return null;
+        })()}
+        
         
         {/* Clustered markers */}
         <MarkerClusterGroup

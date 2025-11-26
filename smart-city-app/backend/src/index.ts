@@ -492,14 +492,27 @@ class AIService {
           console.log(`   Last: [${formattedGeometry[formattedGeometry.length - 1][0]}, ${formattedGeometry[formattedGeometry.length - 1][1]}]`);
         }
 
-        return {
-          text: `Here's the best route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
-          markers: [{
-            position: [toResult.lat, toResult.lng],
+        // Validate destination coordinates before creating marker
+        const destLat = toResult.lat;
+        const destLng = toResult.lng;
+        
+        // Only add destination marker if coordinates are valid
+        const markers: any[] = [];
+        if (destLat >= 47.0 && destLat <= 48.0 && destLng >= 18.5 && destLng <= 19.5) {
+          markers.push({
+            position: [destLat, destLng], // [lat, lng] format
             title: toResult.display_name,
             description: 'Destination',
             type: 'destination'
-          }],
+          });
+          console.log(`✅ Destination marker added: [${destLat}, ${destLng}]`);
+        } else {
+          console.error(`❌ Destination coordinates invalid: [${destLat}, ${destLng}] - NOT adding marker`);
+        }
+
+        return {
+          text: `Here's the best route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
+          markers: markers, // Only valid markers
           route: {
             polyline: formattedGeometry.length > 0 ? formattedGeometry : walkingRoute.geometry,
             distance: distance,
@@ -520,14 +533,27 @@ class AIService {
         toResult.lat, toResult.lng
       );
 
-      return {
-        text: `Here's your route to ${toResult.display_name}. It's about ${distance.toFixed(1)} km away.`,
-        markers: [{
-          position: [toResult.lat, toResult.lng],
+      // Validate destination coordinates before creating marker
+      const destLat = toResult.lat;
+      const destLng = toResult.lng;
+      
+      // Only add destination marker if coordinates are valid
+      const fallbackMarkers: any[] = [];
+      if (destLat >= 47.0 && destLat <= 48.0 && destLng >= 18.5 && destLng <= 19.5) {
+        fallbackMarkers.push({
+          position: [destLat, destLng], // [lat, lng] format
           title: toResult.display_name,
           description: 'Destination',
           type: 'destination'
-        }],
+        });
+        console.log(`✅ Fallback destination marker added: [${destLat}, ${destLng}]`);
+      } else {
+        console.error(`❌ Fallback destination coordinates invalid: [${destLat}, ${destLng}] - NOT adding marker`);
+      }
+
+      return {
+        text: `Here's your route to ${toResult.display_name}. It's about ${distance.toFixed(1)} km away.`,
+        markers: fallbackMarkers, // Only valid markers
         route: {
           polyline: [[startLat, startLng], [toResult.lat, toResult.lng]], // Always start from user location
           distance: `${distance.toFixed(1)} km`,
