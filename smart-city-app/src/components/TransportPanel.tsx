@@ -38,6 +38,7 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTransportExpanded, setIsTransportExpanded] = useState(true);
+  const [isRoutePlanningExpanded, setIsRoutePlanningExpanded] = useState(true);
 
   useEffect(() => {
     if (userLocation) {
@@ -105,12 +106,13 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
     return <Sun className="w-4 h-4 text-yellow-500" />;
   };
 
-  const getModeIcon = (mode: string) => {
+  const getModeIcon = (mode: string, size: number = 16) => {
+    const sizeClass = size === 18 ? "w-[18px] h-[18px]" : "w-4 h-4";
     switch (mode) {
-      case 'walking': return <Footprints className="w-4 h-4" />;
-      case 'cycling': return <Bike className="w-4 h-4" />;
-      case 'public_transport': return <Bus className="w-4 h-4" />;
-      default: return <Footprints className="w-4 h-4" />;
+      case 'walking': return <Footprints className={sizeClass} />;
+      case 'cycling': return <Bike className={sizeClass} />;
+      case 'public_transport': return <Bus className={sizeClass} />;
+      default: return <Footprints className={sizeClass} />;
     }
   };
 
@@ -146,37 +148,83 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
       )}
 
       {/* Route Planning */}
-      <div className="p-4 border-b border-gray-200">
-        <h3 className="text-sm font-medium text-gray-900 mb-3">Plan Route</h3>
+      <div className="p-4 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+        <button
+          onClick={() => setIsRoutePlanningExpanded(!isRoutePlanningExpanded)}
+          className="w-full flex items-center justify-between mb-3 hover:bg-white/50 -mx-2 px-2 py-1 rounded transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Navigation className="w-4 h-4 text-white" />
+            </div>
+            <h3 className="text-sm font-semibold text-gray-900">Plan Route</h3>
+          </div>
+          {isRoutePlanningExpanded ? (
+            <ChevronUp className="w-4 h-4 text-gray-600" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-600" />
+          )}
+        </button>
         
-        {/* Mode Selection */}
-        <div className="flex gap-2 mb-3">
-          {(['walking', 'cycling', 'public_transport'] as const).map((mode) => (
-            <Button
-              key={mode}
-              variant={selectedMode === mode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedMode(mode)}
-              className="flex items-center gap-1"
-            >
-              {getModeIcon(mode)}
-              <span className="capitalize">{mode.replace('_', ' ')}</span>
-            </Button>
-          ))}
-        </div>
+        {isRoutePlanningExpanded && (
+          <div className="space-y-4">
+            {/* Mode Selection */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Transport Mode</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['walking', 'cycling', 'public_transport'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSelectedMode(mode)}
+                    className={`
+                      flex flex-col items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all
+                      ${selectedMode === mode 
+                        ? 'border-blue-600 bg-blue-600 text-white shadow-md' 
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
+                      }
+                    `}
+                  >
+                    <div className={selectedMode === mode ? 'text-white' : 'text-gray-600'}>
+                      {getModeIcon(mode, selectedMode === mode ? 18 : 16)}
+                    </div>
+                    <span className="text-xs font-medium capitalize">
+                      {mode.replace('_', ' ')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Destination Input */}
-        <div className="flex gap-2">
-          <Input
-            placeholder="Enter destination..."
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            className="flex-1"
-          />
-          <Button onClick={handleRouteRequest} disabled={!destination.trim()}>
-            <MapPin className="w-4 h-4" />
-          </Button>
-        </div>
+            {/* Destination Input */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Destination</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Enter destination address..."
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && destination.trim()) {
+                        handleRouteRequest();
+                      }
+                    }}
+                    className="pl-10 pr-4 py-2.5 border-gray-300 focus:border-blue-500 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <Button 
+                  onClick={handleRouteRequest} 
+                  disabled={!destination.trim()}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Navigation className="w-4 h-4 mr-1.5" />
+                  Go
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transport Stops */}
