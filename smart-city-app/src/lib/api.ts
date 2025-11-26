@@ -114,6 +114,19 @@ class ApiService {
     }
   }
 
+  // Get all nearby places (all categories at once)
+  async getNearbyPlaces(lat: number, lng: number, radius: number = 1000): Promise<Place[]> {
+    try {
+      const response = await this.api.get('/api/places/nearby', {
+        params: { lat, lng, radius }
+      });
+      return response.data.places || [];
+    } catch (error) {
+      console.error('Nearby places API error:', error);
+      throw error;
+    }
+  }
+
   // Geocoding API
   async geocode(address: string): Promise<GeocodeResult | null> {
     try {

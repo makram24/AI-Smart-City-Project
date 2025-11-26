@@ -817,6 +817,95 @@ app.get('/api/places/search', async (req, res) => {
   }
 });
 
+// Get all nearby places grouped by category
+app.get('/api/places/nearby', async (req, res) => {
+  const { lat, lng, radius = 1000 } = req.query;
+  
+  try {
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const searchLat = parseFloat(lat as string);
+    const searchLng = parseFloat(lng as string);
+    
+    // STRICT: Validate search location is in Budapest
+    if (searchLat < 47.3 || searchLat > 47.7 || searchLng < 18.9 || searchLng > 19.4) {
+      return res.status(400).json({ error: 'Location must be within Budapest area' });
+    }
+
+    // Fetch places for multiple categories
+    const categories = ['pharmacy', 'hospital', 'restaurant', 'cafe', 'bank', 'atm', 'clinic'];
+    const allPlaces: any[] = [];
+    
+    // Fetch places for each category in parallel
+    await Promise.all(
+      categories.map(async (category) => {
+        try {
+          const places = await geospatialService.searchPlaces(
+            category,
+            searchLat,
+            searchLng,
+            parseInt(radius as string)
+          );
+          
+          const formattedPlaces = places.map((place: any) => {
+            const placeLat = place.lat || place.center?.lat;
+            const placeLng = place.lon || place.center?.lon;
+            
+            // STRICT: Final validation - ensure place is in Budapest
+            if (!placeLat || !placeLng) {
+              return null;
+            }
+            
+            if (placeLat < 47.3 || placeLat > 47.7 || placeLng < 18.9 || placeLng > 19.4) {
+              return null;
+            }
+            
+            return {
+              id: place.id,
+              name: place.tags?.name || 'Unknown Place',
+              type: place.tags?.amenity || category,
+              position: [placeLat, placeLng],
+              description: place.tags?.opening_hours || place.tags?.cuisine || 'No additional info',
+              distance: geospatialService.calculateDistance(
+                searchLat,
+                searchLng,
+                placeLat,
+                placeLng
+              ).toFixed(1) + ' km'
+            };
+          }).filter((place: any) => place !== null);
+          
+          allPlaces.push(...formattedPlaces);
+        } catch (err) {
+          console.warn(`Failed to fetch ${category} places:`, err);
+        }
+      })
+    );
+    
+    // Sort by distance
+    allPlaces.sort((a, b) => {
+      const distA = parseFloat(a.distance.replace(' km', '')) || 999;
+      const distB = parseFloat(b.distance.replace(' km', '')) || 999;
+      return distA - distB;
+    });
+
+    res.json({
+      places: allPlaces,
+      location: { lat: searchLat, lng: searchLng },
+      count: allPlaces.length,
+      categories: categories
+    });
+  } catch (error) {
+    console.error('Nearby places error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch nearby places',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Geocoding endpoint
 app.get('/api/geocode', async (req, res) => {
   const { address } = req.query;
