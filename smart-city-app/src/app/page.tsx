@@ -6,6 +6,7 @@ import Chat from "@/components/Chat";
 import TransportPanel from "@/components/TransportPanel";
 import MapFilters from "@/components/MapFilters";
 import { apiService, ChatMessage, MapMarker } from "@/lib/api";
+import { isWithinBudapest, normalizeCoordinate } from "@/lib/geoValidation";
 
 // Dynamically import Map to avoid SSR issues
 const Map = dynamic(() => import("@/components/Map"), {
@@ -39,6 +40,25 @@ export default function Home() {
     maxDistance: 2
   });
 
+  const sanitizeRoute = (route?: ChatMessage["route"] | null) => {
+    if (!route || !route.polyline) {
+      return null;
+    }
+
+    const polyline = route.polyline
+      .map((coord) => normalizeCoordinate(coord as [number, number]))
+      .filter((coord): coord is [number, number] => !!coord);
+
+    if (polyline.length === 0) {
+      return null;
+    }
+
+    return {
+      ...route,
+      polyline
+    };
+  };
+
   // Check API connection on mount
   useEffect(() => {
     const checkApi = async () => {
@@ -62,7 +82,7 @@ export default function Home() {
           console.log(`📍 Raw geolocation: latitude=${latitude}, longitude=${longitude}`);
           
           // Validate coordinates are in Budapest
-          if (latitude >= 47.0 && latitude <= 48.0 && longitude >= 18.5 && longitude <= 19.5) {
+          if (isWithinBudapest(latitude, longitude)) {
             setUserLocation({ lat: latitude, lng: longitude });
             console.log(`✅ User location set: lat=${latitude}, lng=${longitude}`);
             console.log(`   Will pass to Map as center: [${latitude}, ${longitude}] (lat, lng for Leaflet)`);
@@ -125,64 +145,8 @@ export default function Home() {
         setMapMarkers(aiResponse.markers);
       }
 
-      // Update route if provided - ensure it's properly formatted
-      if (aiResponse.route) {
-        console.log('🗺️ Route received from AI:', {
-          hasPolyline: !!aiResponse.route.polyline,
-          polylineLength: aiResponse.route.polyline?.length || 0,
-          distance: aiResponse.route.distance,
-          duration: aiResponse.route.duration
-        });
-        
-        // Log first few coordinates to debug
-        if (aiResponse.route.polyline && aiResponse.route.polyline.length > 0) {
-          console.log('   First coordinate:', aiResponse.route.polyline[0]);
-          console.log('   Last coordinate:', aiResponse.route.polyline[aiResponse.route.polyline.length - 1]);
-        }
-        
-        // Ensure polyline is in correct format [lat, lng][]
-        const formattedPolyline = aiResponse.route.polyline?.map((coord: any) => {
-          if (Array.isArray(coord) && coord.length >= 2) {
-            let lat = coord[0];
-            let lng = coord[1];
-            
-            // Validate coordinates are in Budapest
-            if (lat < 47.0 || lat > 48.0 || lng < 18.5 || lng > 19.5) {
-              console.warn(`⚠️ Invalid coordinate in route: [${lat}, ${lng}]`);
-              // Try swapping
-              if (lng >= 47.0 && lng <= 48.0 && lat >= 18.5 && lat <= 19.5) {
-                console.warn(`   Swapping: [${lng}, ${lat}]`);
-                [lat, lng] = [lng, lat];
-              }
-            }
-            
-            return [lat, lng]; // Return as [lat, lng] for frontend
-          }
-          return coord;
-        }).filter((coord: number[]) => {
-          // Filter out invalid coordinates
-          if (Array.isArray(coord) && coord.length >= 2) {
-            const lat = coord[0];
-            const lng = coord[1];
-            return lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
-          }
-          return false;
-        }) || [];
-        
-        const formattedRoute = {
-          ...aiResponse.route,
-          polyline: formattedPolyline
-        };
-        
-        console.log('✅ Route formatted:', {
-          originalLength: aiResponse.route.polyline?.length || 0,
-          formattedLength: formattedPolyline.length,
-          firstCoord: formattedPolyline[0],
-          lastCoord: formattedPolyline[formattedPolyline.length - 1]
-        });
-        
-        setCurrentRoute(formattedRoute);
-      }
+      const formattedRoute = sanitizeRoute(aiResponse.route);
+      setCurrentRoute(formattedRoute);
 
     } catch (error) {
       console.error('Error sending message:', error);

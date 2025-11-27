@@ -1357,30 +1357,46 @@ app.get('/api/routes', async (req, res) => {
       });
     }
     
+    const parseCoordinateString = (value?: string | string[] | null): [number, number] | null => {
+      if (!value) return null;
+      const raw = value.toString().split(',').map(Number);
+      if (raw.length !== 2 || raw.some((num) => Number.isNaN(num))) {
+        return null;
+      }
+      const normalized = normalizeCoordinate([raw[0], raw[1]]);
+      return normalized;
+    };
+
+    const fromCoords = parseCoordinateString(from as string);
+    if (!fromCoords) {
+      return res.status(400).json({ error: 'Invalid start location format. Expected: lat,lng within Budapest.' });
+    }
+
+    const toCoords = parseCoordinateString(to as string) || [47.5079, 19.0502];
+
     if (mode === 'public_transport') {
       // Public transport route
-      const fromCoords = from.toString().split(',').map(Number);
-      const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
-      
-      // Validate from coordinates
-      if (fromCoords.length !== 2 || isNaN(fromCoords[0]) || isNaN(fromCoords[1])) {
-        return res.status(400).json({ 
-          error: 'Invalid start location format. Expected: lat,lng' 
-        });
-      }
-      
       const transportRoute = await publicTransportService.planJourney(
-        [fromCoords[0], fromCoords[1]],
-        [toCoords[0], toCoords[1]]
+        fromCoords,
+        toCoords
       );
       
       if (transportRoute) {
+        const fallbackGeometry = await routingService.getWalkingRoute(
+          fromCoords,
+          toCoords
+        );
+        const geometry = fallbackGeometry?.geometry || [fromCoords, toCoords];
+        const distanceLabel = fallbackGeometry
+          ? routingService.formatDistance(fallbackGeometry.distance)
+          : `${(transportRoute.duration * 0.4).toFixed(1)} km`;
+
         res.json({
           id: Date.now().toString(),
           mode: 'public_transport',
           from: from,
           to: to,
-          distance: `${(transportRoute.duration * 0.5).toFixed(1)} km`,
+          distance: distanceLabel,
           duration: `${transportRoute.duration} minutes`,
           transfers: transportRoute.transfers,
           steps: transportRoute.steps.map(step => ({
@@ -1389,30 +1405,13 @@ app.get('/api/routes', async (req, res) => {
             type: step.type,
             route: step.route
           })),
-          polyline: transportRoute.steps.map(step => [step.from, step.to])
+          polyline: geometry
         });
       } else {
         res.status(404).json({ error: 'No public transport route found' });
       }
     } else if (mode === 'cycling') {
       // Cycling route using OpenRouteService or fallback
-      // 'from' should always be user's current location (already validated above)
-      if (!from) {
-        return res.status(400).json({ 
-          error: 'Start location (from) is required. Please provide your current location.' 
-        });
-      }
-      
-      const fromCoords = from.toString().split(',').map(Number);
-      const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
-      
-      // Validate from coordinates
-      if (fromCoords.length !== 2 || isNaN(fromCoords[0]) || isNaN(fromCoords[1])) {
-        return res.status(400).json({ 
-          error: 'Invalid start location format. Expected: lat,lng' 
-        });
-      }
-      
       console.log(`🚴 Cycling route: From user location [${fromCoords[0]}, ${fromCoords[1]}] to [${toCoords[0]}, ${toCoords[1]}]`);
       
       const cyclingRoute = await routingService.getCyclingRoute(
@@ -1452,23 +1451,6 @@ app.get('/api/routes', async (req, res) => {
       }
     } else {
       // Walking route using OpenRouteService or fallback
-      // 'from' should always be user's current location (already validated above)
-      if (!from) {
-        return res.status(400).json({ 
-          error: 'Start location (from) is required. Please provide your current location.' 
-        });
-      }
-      
-      const fromCoords = from.toString().split(',').map(Number);
-      const toCoords = to ? to.toString().split(',').map(Number) : [47.5079, 19.0502];
-      
-      // Validate from coordinates
-      if (fromCoords.length !== 2 || isNaN(fromCoords[0]) || isNaN(fromCoords[1])) {
-        return res.status(400).json({ 
-          error: 'Invalid start location format. Expected: lat,lng' 
-        });
-      }
-      
       console.log(`🚶 Walking route: From user location [${fromCoords[0]}, ${fromCoords[1]}] to [${toCoords[0]}, ${toCoords[1]}]`);
       
       const walkingRoute = await routingService.getWalkingRoute(
