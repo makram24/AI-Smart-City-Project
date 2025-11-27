@@ -173,13 +173,16 @@ export default function Home() {
           text: getMockResponse(messageText),
           sender: "ai",
           timestamp: new Date().toISOString(),
-          markers: addMockMarkers(messageText)
+          markers: addMockMarkers(messageText),
+          persona: activePersona || DEFAULT_PERSONA
         };
       }
       
       setMessages(prev => prev.map(msg => 
         msg.id === loadingMessage.id ? aiResponse : msg
       ));
+
+      setActivePersona(prev => aiResponse.persona || prev || DEFAULT_PERSONA);
 
       // Update map markers if provided
       if (aiResponse.markers && aiResponse.markers.length > 0) {
@@ -196,6 +199,7 @@ export default function Home() {
         text: "Sorry, I'm having trouble processing your request. Please try again.",
         sender: "ai",
         timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
       };
       
       setMessages(prev => prev.map(msg => 
@@ -306,6 +310,7 @@ export default function Home() {
         text: 'Neighborhood playbooks need the backend connection. Please reconnect and try again.',
         sender: 'ai',
         timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
       };
       setMessages(prev => [...prev, warningMessage]);
       return;
@@ -337,8 +342,7 @@ export default function Home() {
         text: `${detail.narrative}${highlights ? ` Highlights: ${highlights}` : ''}`,
         sender: 'ai',
         timestamp: new Date().toISOString(),
-        persona: detail.persona,
-        suggestions: detail.recommendedPrompts
+        persona: activePersona || DEFAULT_PERSONA
       };
 
       setMessages(prev => [...prev, narrativeMessage]);
@@ -349,6 +353,7 @@ export default function Home() {
         text: 'Sorry, I could not load that playbook right now. Please try again in a bit.',
         sender: 'ai',
         timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -360,6 +365,10 @@ export default function Home() {
     handleSendMessage(prompt);
   };
 
+  const handlePersonaPrompt = (prompt: string) => {
+    handleSendMessage(prompt);
+  };
+
   const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
     if (!userLocation) {
       console.warn('User location not available for route planning');
@@ -368,6 +377,7 @@ export default function Home() {
         text: 'I need your current location to plan a route. Please allow location access and try again.',
         sender: 'ai',
         timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
       };
       setMessages(prev => [...prev, errorMessage]);
       return;
@@ -427,7 +437,8 @@ export default function Home() {
           text: `Route planned: ${route.distance} in ${route.duration} by ${mode.replace('_', ' ')}. ${instructionsText}`,
           sender: 'ai',
           timestamp: new Date().toISOString(),
-          route: route
+          route: route,
+          persona: activePersona || DEFAULT_PERSONA
         };
         setMessages(prev => [...prev, routeMessage]);
       } else {
@@ -440,6 +451,7 @@ export default function Home() {
         text: `Sorry, I couldn't plan a route to "${destination}". Please check the address or try a different destination.`,
         sender: 'ai',
         timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -523,6 +535,8 @@ export default function Home() {
             onSendMessage={handleSendMessage}
             messages={messages}
             isLoading={isLoading}
+            persona={activePersona}
+            onPersonaPrompt={handlePersonaPrompt}
           />
         </div>
         {selectedPlaybook && (
