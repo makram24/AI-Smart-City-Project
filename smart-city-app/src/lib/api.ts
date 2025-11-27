@@ -10,8 +10,7 @@ export interface ChatMessage {
   markers?: MapMarker[];
   route?: RouteData;
   isLoading?: boolean;
-  persona?: string;
-  suggestions?: string[];
+  persona?: PersonaContext;
 }
 
 export interface MapMarker {
@@ -104,6 +103,15 @@ export interface WeatherContext {
   isGoodForCycling: boolean;
   isGoodForWalking: boolean;
   recommendations: string[];
+}
+
+export interface PersonaContext {
+  id: string;
+  name: string;
+  tagline: string;
+  tone: string;
+  recommendedPrompts: string[];
+  suggestedPlaybookId?: string;
 }
 
 export interface PlaybookSummary {

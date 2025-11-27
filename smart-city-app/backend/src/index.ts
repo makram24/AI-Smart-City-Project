@@ -1122,15 +1122,23 @@ class AIService {
   private applyPersona<T extends { text: string; markers: any[]; route?: any }>(
     persona: PersonaDefinition | null,
     response: T
-  ): T & { persona?: string; suggestions?: string[] } {
+  ): T & { persona?: PersonaPayload; suggestions?: string[] } {
     if (!persona) {
       return response;
     }
     const trimmedPrefix = persona.prefix ? `${persona.prefix} ` : '';
-    const enriched: T & { persona?: string; suggestions?: string[] } = {
+    const personaPayload: PersonaPayload = {
+      id: persona.id,
+      name: persona.label,
+      tagline: persona.description,
+      tone: persona.tone,
+      recommendedPrompts: persona.suggestions,
+      suggestedPlaybookId: persona.recommendedPlaybookId
+    };
+    const enriched: T & { persona?: PersonaPayload; suggestions?: string[] } = {
       ...response,
       text: `${trimmedPrefix}${response.text}`,
-      persona: persona.label,
+      persona: personaPayload,
       suggestions: persona.suggestions
     };
     return enriched;

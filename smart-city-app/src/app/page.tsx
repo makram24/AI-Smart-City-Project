@@ -6,7 +6,7 @@ import Chat from "@/components/Chat";
 import TransportPanel from "@/components/TransportPanel";
 import MapFilters from "@/components/MapFilters";
 import { NeighborhoodPlaybooks } from "@/components/NeighborhoodPlaybooks";
-import { apiService, ChatMessage, MapMarker, PlaybookSummary, PlaybookDetail } from "@/lib/api";
+import { apiService, ChatMessage, MapMarker, PlaybookSummary, PlaybookDetail, PersonaContext } from "@/lib/api";
 import { isWithinBudapest, normalizeCoordinate } from "@/lib/geoValidation";
 
 // Dynamically import Map to avoid SSR issues
@@ -21,6 +21,18 @@ const Map = dynamic(() => import("@/components/Map"), {
     </div>
   )
 });
+
+const DEFAULT_PERSONA: PersonaContext = {
+  id: "local_concierge",
+  name: "City Concierge",
+  tagline: "Friendly guide for everyday Budapest plans.",
+  tone: "balanced",
+  recommendedPrompts: [
+    "What is near me right now?",
+    "Plan a scenic walk along the Danube",
+    "Check tram arrivals around me"
+  ]
+};
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -43,6 +55,7 @@ export default function Home() {
   const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookDetail | null>(null);
   const [loadingPlaybookId, setLoadingPlaybookId] = useState<string | null>(null);
+  const [activePersona, setActivePersona] = useState<PersonaContext | null>(null);
 
   const sanitizeRoute = (route?: ChatMessage["route"] | null) => {
     if (!route || !route.polyline) {

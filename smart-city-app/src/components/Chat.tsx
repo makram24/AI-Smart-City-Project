@@ -3,16 +3,18 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, MapPin, Navigation } from "lucide-react";
-import { ChatMessage } from "@/lib/api";
+import { Send, MapPin, Navigation, Sparkles } from "lucide-react";
+import { ChatMessage, PersonaContext } from "@/lib/api";
 
 interface ChatProps {
   onSendMessage: (message: string) => void;
   messages: ChatMessage[];
   isLoading?: boolean;
+  persona?: PersonaContext | null;
+  onPersonaPrompt?: (prompt: string) => void;
 }
 
-export default function Chat({ onSendMessage, messages, isLoading }: ChatProps) {
+export default function Chat({ onSendMessage, messages, isLoading, persona, onPersonaPrompt }: ChatProps) {
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -34,6 +36,13 @@ export default function Chat({ onSendMessage, messages, isLoading }: ChatProps) 
 
   const handleQuickAction = (action: string) => {
     setInputValue(action);
+  };
+
+  const handlePersonaPromptClick = (prompt: string) => {
+    if (!prompt || isLoading) {
+      return;
+    }
+    onPersonaPrompt?.(prompt);
   };
 
   const quickActions = [
@@ -72,6 +81,33 @@ export default function Chat({ onSendMessage, messages, isLoading }: ChatProps) 
             );
           })}
         </div>
+        {persona && (
+          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/80 p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide font-semibold text-blue-500">
+                  {persona.name}
+                </p>
+                <p className="text-xs text-blue-900">{persona.tagline}</p>
+              </div>
+              <Sparkles className="w-4 h-4 text-blue-400" />
+            </div>
+            {persona.recommendedPrompts.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {persona.recommendedPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => handlePersonaPromptClick(prompt)}
+                    className="text-[11px] px-3 py-1 rounded-full border border-blue-200 text-blue-700 bg-white hover:bg-blue-100 transition disabled:opacity-50"
+                    disabled={isLoading}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -97,28 +133,13 @@ export default function Chat({ onSendMessage, messages, isLoading }: ChatProps) 
               >
                 {message.sender === "ai" && message.persona && (
                   <p className="text-[10px] uppercase tracking-wide font-semibold text-blue-500 mb-1">
-                    {message.persona}
+                    {message.persona.name}
                   </p>
                 )}
                 <p className="text-sm whitespace-pre-line">{message.text}</p>
                 <p className="text-xs opacity-70 mt-1">
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </p>
-                {message.sender === "ai" && message.suggestions && message.suggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {message.suggestions.map((suggestion) => (
-                      <Button
-                        key={suggestion}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleQuickAction(suggestion)}
-                        className="text-xs bg-background hover:bg-background/80 border-border"
-                      >
-                        {suggestion}
-                      </Button>
-                    ))}
-                  </div>
-                )}
                 {message.isLoading && (
                   <div className="flex items-center mt-2">
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
