@@ -180,8 +180,13 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
     const converted = route.polyline.map((coord: number[], index: number) => {
       if (Array.isArray(coord) && coord.length >= 2) {
         // Route prop should have [lat, lng] format from backend
-        let lat = coord[0];
-        let lng = coord[1];
+        let lat = typeof coord[0] === 'number' ? coord[0] : parseFloat(coord[0]);
+        let lng = typeof coord[1] === 'number' ? coord[1] : parseFloat(coord[1]);
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          console.error(`❌ Coordinate ${index} is non-numeric:`, coord);
+          return null;
+        }
         
         // STRICT validation - coordinates MUST be in Budapest
         // If coordinates are clearly outside Budapest, try swapping
@@ -209,6 +214,10 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
       if (!coord) return false;
       const lat = coord[0];
       const lng = coord[1];
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.error(`❌ Filtered coordinate not numeric:`, coord);
+        return false;
+      }
       const isValid = lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5;
       if (!isValid) {
         console.error(`❌ Filtered coordinate still invalid: [${lat}, ${lng}] (lat, lng)`);
