@@ -230,7 +230,7 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
       console.log(`   First: [${converted[0][0]}, ${converted[0][1]}] (lat, lng)`);
       console.log(`   Last: [${converted[converted.length - 1][0]}, ${converted[converted.length - 1][1]}] (lat, lng)`);
     } else {
-      console.error(`❌ No valid coordinates after conversion! All ${route.polyline.length} coordinates were invalid.`);
+      console.warn(`⚠️ Route polyline skipped: unable to convert any of the ${route.polyline.length} provided coordinates.`, route.polyline);
     }
     
     return converted;
