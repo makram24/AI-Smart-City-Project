@@ -42,6 +42,17 @@ export interface Place {
   distance: string;
 }
 
+export interface HistoricalPlace {
+  id: string | number;
+  name: string;
+  type?: string;
+  position?: [number, number];
+  description?: string;
+  distance?: string;
+  historicType?: string;
+  tourismType?: string;
+}
+
 export interface GeocodeResult {
   lat: number;
   lng: number;

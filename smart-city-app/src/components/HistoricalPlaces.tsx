@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, MapPin, Navigation, Landmark, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, MapPin, Navigation, Landmark, X, Route } from "lucide-react";
 import { apiService, HistoricalPlace } from "@/lib/api";
 
 interface HistoricalPlacesProps {
@@ -14,6 +14,7 @@ export default function HistoricalPlaces({ userLocation, onRouteRequest }: Histo
   const [places, setPlaces] = useState<HistoricalPlace[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<HistoricalPlace | null>(null);
 
   useEffect(() => {
     if (userLocation && isExpanded) {
@@ -79,6 +80,7 @@ export default function HistoricalPlaces({ userLocation, onRouteRequest }: Histo
                     console.log(`🗺️ Requesting route to ${place.name} at ${destination}`);
                     onRouteRequest('walking', destination);
                   }
+                  setSelectedPlace(place);
                 };
                 
                 return (
@@ -125,6 +127,92 @@ export default function HistoricalPlaces({ userLocation, onRouteRequest }: Histo
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {selectedPlace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <button
+              onClick={() => setSelectedPlace(null)}
+              className="absolute right-4 top-4 rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Close place details"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
+                  <Landmark className="h-6 w-6 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{selectedPlace.name}</h3>
+                  <p className="text-sm text-gray-500">{selectedPlace.historicType || selectedPlace.tourismType || 'Historical site'}</p>
+                </div>
+              </div>
+
+              {selectedPlace.description && (
+                <p className="text-sm leading-relaxed text-gray-700">{selectedPlace.description}</p>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-2">
+                {selectedPlace.distance && (
+                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
+                    <MapPin className="h-4 w-4" />
+                    <span>{selectedPlace.distance} away</span>
+                  </div>
+                )}
+                {selectedPlace.position && (
+                  <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Coordinates</p>
+                    <p className="font-medium text-gray-900">{selectedPlace.position[0].toFixed(4)}, {selectedPlace.position[1].toFixed(4)}</p>
+                  </div>
+                )}
+                {selectedPlace.tourismType && (
+                  <div className="rounded-lg border border-gray-100 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Tourism Type</p>
+                    <p className="font-medium text-gray-900">{selectedPlace.tourismType}</p>
+                  </div>
+                )}
+                {selectedPlace.type && (
+                  <div className="rounded-lg border border-gray-100 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">OSM Type</p>
+                    <p className="font-medium text-gray-900">{selectedPlace.type}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Directions</p>
+                <div className="flex flex-wrap gap-2">
+                  {(['walking', 'cycling', 'public_transport'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      disabled={!onRouteRequest || !selectedPlace.position}
+                      onClick={() => {
+                        if (onRouteRequest && selectedPlace.position) {
+                          const destination = `${selectedPlace.position[0]},${selectedPlace.position[1]}`;
+                          console.log(`🗺️ Requesting ${mode} route to ${selectedPlace.name} at ${destination}`);
+                          onRouteRequest(mode, destination);
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-amber-200 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                    >
+                      <Route className="h-3.5 w-3.5" />
+                      {mode.replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedPlace(null)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:border-gray-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
