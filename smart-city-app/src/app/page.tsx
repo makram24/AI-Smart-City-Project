@@ -324,6 +324,8 @@ export default function Home() {
         text: `${detail.narrative}${highlights ? ` Highlights: ${highlights}` : ''}`,
         sender: 'ai',
         timestamp: new Date().toISOString(),
+        persona: detail.persona,
+        suggestions: detail.recommendedPrompts
       };
 
       setMessages(prev => [...prev, narrativeMessage]);

@@ -10,6 +10,8 @@ export interface ChatMessage {
   markers?: MapMarker[];
   route?: RouteData;
   isLoading?: boolean;
+  persona?: string;
+  suggestions?: string[];
 }
 
 export interface MapMarker {

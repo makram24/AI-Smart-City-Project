@@ -592,14 +592,118 @@ class GeospatialService {
 
 const geospatialService = new GeospatialService();
 
+type PersonaKey = 'culture_curator' | 'daily_flow_optimizer' | 'evening_compass' | 'mobility_hacker' | 'local_concierge';
+
+interface PersonaDefinition {
+  id: PersonaKey;
+  label: string;
+  keywords: string[];
+  prefix: string;
+  suggestions: string[];
+  description: string;
+  tone: string;
+  recommendedPlaybookId?: string;
+  fallbackMessage: string;
+}
+
+interface PersonaPayload {
+  id: PersonaKey;
+  name: string;
+  tagline: string;
+  tone: string;
+  recommendedPrompts: string[];
+  suggestedPlaybookId?: string;
+}
+
+const PERSONA_REGISTRY: Record<PersonaKey, PersonaDefinition> = {
+  culture_curator: {
+    id: 'culture_curator',
+    label: 'Culture Curator',
+    keywords: ['castle', 'museum', 'heritage', 'history', 'tour', 'bastion', 'parliament', 'gallery', 'market hall'],
+    prefix: 'Culture Curator •',
+    suggestions: [
+      'Share a quick history fact nearby',
+      'Find a landmark café with views',
+      'Plan a heritage walking loop'
+    ],
+    description: 'Story-rich walks, heritage sites, and curated cafés.',
+    tone: 'calm',
+    recommendedPlaybookId: 'castle-district-heritage',
+    fallbackMessage: 'Culture Curator ready. I can line up museums, castles, cafés, and narrated walks across Budapest.'
+  },
+  daily_flow_optimizer: {
+    id: 'daily_flow_optimizer',
+    label: 'Daily Flow Optimizer',
+    keywords: ['commute', 'office', 'work', 'meeting', 'tram', 'metro', 'transfer', 'pharmacy', 'errand', 'bank'],
+    prefix: 'Daily Flow •',
+    suggestions: [
+      'Show tram delays around me',
+      'Find the nearest pharmacy',
+      'Plan the fastest commute'
+    ],
+    description: 'Keeps errands, commutes, and essential stops efficient.',
+    tone: 'practical',
+    recommendedPlaybookId: 'grand-boulevard-commute',
+    fallbackMessage: 'Daily Flow Optimizer online. Ask me for tram schedules, metro transfers, or fast multimodal commutes.'
+  },
+  evening_compass: {
+    id: 'evening_compass',
+    label: 'Evening Compass',
+    keywords: ['evening', 'night', 'sunset', 'drinks', 'date', 'dinner', 'bar', 'restaurant'],
+    prefix: 'Evening Compass •',
+    suggestions: [
+      'Find riverside bars with music',
+      'Plan a golden-hour walk',
+      'List late-night food spots'
+    ],
+    description: 'Golden-hour strolls, skyline views, and night routes.',
+    tone: 'vibrant',
+    recommendedPlaybookId: 'danube-evening-loop',
+    fallbackMessage: 'Evening Compass tuned in. Want riverside walks, bars, or late-night transit tips?'
+  },
+  mobility_hacker: {
+    id: 'mobility_hacker',
+    label: 'Mobility Hacker',
+    keywords: ['bike', 'bicycle', 'multimodal', 'mode mix', 'wizard', 'bubi', 'scooter'],
+    prefix: 'Mobility Hacker •',
+    suggestions: [
+      'Suggest a bike + tram combo',
+      'Find nearby MOL Bubi docks',
+      'Compare cycling vs walking time'
+    ],
+    description: 'Blends cycling, bikeshare, and transit for smart combos.',
+    tone: 'energizing',
+    fallbackMessage: 'Mobility Hacker here. Ask for bike plus tram combos, MOL Bubi docks, or ways to shave minutes off your ride.'
+  },
+  local_concierge: {
+    id: 'local_concierge',
+    label: 'Local Concierge',
+    keywords: [],
+    prefix: 'City Concierge •',
+    suggestions: [
+      'Find what’s near me',
+      'Plan a scenic walk',
+      'Show weather-friendly plans'
+    ],
+    description: 'Friendly default guidance when intent is broad.',
+    tone: 'balanced',
+    fallbackMessage: 'City Concierge at your service. Ask me for nearby finds, scenic walks, or live transit context anywhere in Budapest.'
+  }
+};
+
+const PERSONA_LIST = Object.values(PERSONA_REGISTRY);
+
 // AI Service with specialized tools
 class AIService {
   async processQuery(message: string, userLocation?: { lat: number; lng: number }): Promise<{
     text: string;
     markers: any[];
     route?: any;
+    persona?: string;
+    suggestions?: string[];
   }> {
     const lowerMessage = message.toLowerCase();
+    let personaContext = this.detectPersona(lowerMessage) || this.getPersonaById('local_concierge');
 
     // Route/Directions queries - check for various route-related phrases
     if (lowerMessage.includes('route') || lowerMessage.includes('direction') || 
@@ -607,22 +711,23 @@ class AIService {
         lowerMessage.includes('best route') || lowerMessage.includes('show route') ||
         lowerMessage.includes('get to') || lowerMessage.includes('navigate to')) {
       if (!userLocation) {
-        return {
+        return this.applyPersona(personaContext, {
           text: 'I can help you with directions, but I need your location. Please allow location access.',
           markers: []
-        };
+        });
       }
 
       // Extract destination from message
       const destination = this.extractDestination(message);
       if (destination) {
+        const destinationPersona = this.hintPersonaForDestination(destination) || personaContext;
         const result = await this.getDirections('here', destination, userLocation);
-        return result;
+        return this.applyPersona(destinationPersona, result);
       } else {
-        return {
+        return this.applyPersona(personaContext, {
           text: 'I can help you with directions! Please specify where you want to go (e.g., "route to Buda Castle" or "best route to the city center").',
           markers: []
-        };
+        });
       }
     }
 
@@ -632,27 +737,28 @@ class AIService {
     
     if (foundService) {
       if (!userLocation) {
-        return {
+        return this.applyPersona(this.getPersonaForService(foundService) || personaContext, {
           text: `I can help you find ${foundService}, but I need your location. Please allow location access to get accurate results.`,
           markers: []
-        };
+        });
       }
 
+      const servicePersona = this.getPersonaForService(foundService) || personaContext;
       const result = await this.searchServices(foundService, userLocation);
-      return result;
+      return this.applyPersona(servicePersona, result);
     }
 
     // Location context queries
     if (lowerMessage.includes('near me') || lowerMessage.includes('around here') || lowerMessage.includes('what\'s nearby')) {
       if (!userLocation) {
-        return {
+        return this.applyPersona(personaContext, {
           text: 'I can help you find what\'s nearby, but I need your location. Please allow location access.',
           markers: []
-        };
+        });
       }
 
       const result = await this.getLocationContext(userLocation);
-      return result;
+      return this.applyPersona(personaContext, result);
     }
 
     // Use OpenAI if available for general queries
@@ -674,10 +780,10 @@ class AIService {
           temperature: 0.7
         });
 
-        return {
+        return this.applyPersona(personaContext, {
           text: completion.choices[0].message.content || 'I can help you with Budapest city services. What would you like to know?',
           markers: []
-        };
+        });
       } catch (error) {
         console.error('OpenAI error:', error);
       }
@@ -685,16 +791,16 @@ class AIService {
 
     // Fallback responses
     if (lowerMessage.includes('budapest') || lowerMessage.includes('city')) {
-      return {
+      return this.applyPersona(personaContext, {
         text: 'Welcome to Budapest! I can help you find places, get directions, check public transport schedules, and discover local events. What would you like to know?',
         markers: []
-      };
+      });
     }
 
-    return {
+    return this.applyPersona(personaContext, {
       text: 'I can help you find places, get directions, check transport schedules, and discover what\'s happening in Budapest. Could you be more specific about what you need?',
       markers: []
-    };
+    });
   }
 
   private extractDestination(message: string): string | null {
@@ -747,7 +853,7 @@ class AIService {
       // Geocode the destination
       const toResult = await geospatialService.geocode(to);
       if (!toResult) {
-        return {
+      return {
           text: `I couldn't find the destination "${to}". Please provide a valid address or landmark.`,
           markers: []
         };
@@ -815,7 +921,7 @@ class AIService {
           console.error(`❌ Destination coordinates invalid: [${destLat}, ${destLng}] - NOT adding marker`);
         }
 
-        return {
+      return {
           text: `Here's the best route to ${toResult.display_name}. Distance: ${distance}, Duration: ${duration}. ${firstInstructions}`,
           markers: markers, // Only valid markers
           route: {
@@ -951,6 +1057,84 @@ class AIService {
       };
     }
   }
+
+  private detectPersona(message: string): PersonaDefinition | null {
+    if (!message || message.trim().length === 0) {
+      return null;
+    }
+
+    let bestMatch: PersonaDefinition | null = null;
+    let bestScore = 0;
+
+    for (const persona of PERSONA_LIST) {
+      if (persona.keywords.length === 0) continue;
+      let score = 0;
+      for (const keyword of persona.keywords) {
+        if (message.includes(keyword)) {
+          score += 1;
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = persona;
+      }
+    }
+
+    return bestScore > 0 ? bestMatch : null;
+  }
+
+  private getPersonaById(id: PersonaKey): PersonaDefinition | null {
+    return PERSONA_REGISTRY[id] || null;
+  }
+
+  private getPersonaForService(service: string): PersonaDefinition | null {
+    const normalized = service.toLowerCase();
+    if (['restaurant', 'restaurants', 'food', 'hotel'].includes(normalized)) {
+      return this.getPersonaById('evening_compass');
+    }
+    if (['pharmacy', 'pharmacies', 'bank', 'atm', 'hospital', 'clinic', 'gas', 'parking'].includes(normalized)) {
+      return this.getPersonaById('daily_flow_optimizer');
+    }
+    if (['cafe', 'cafes'].includes(normalized)) {
+      return this.getPersonaById('culture_curator');
+    }
+    return null;
+  }
+
+  private hintPersonaForDestination(destination: string): PersonaDefinition | null {
+    const lower = destination.toLowerCase();
+    const cultureHints = ['castle', 'bastion', 'museum', 'gallery', 'parliament', 'basilica', 'market hall', 'heroes', 'liberty bridge'];
+    const eveningHints = ['bar', 'pub', 'night', 'sunset', 'restaurant', 'danube'];
+    const mobilityHints = ['bike', 'cycling', 'tram'];
+
+    if (cultureHints.some(keyword => lower.includes(keyword))) {
+      return this.getPersonaById('culture_curator');
+    }
+    if (eveningHints.some(keyword => lower.includes(keyword))) {
+      return this.getPersonaById('evening_compass');
+    }
+    if (mobilityHints.some(keyword => lower.includes(keyword))) {
+      return this.getPersonaById('mobility_hacker');
+    }
+    return null;
+  }
+
+  private applyPersona<T extends { text: string; markers: any[]; route?: any }>(
+    persona: PersonaDefinition | null,
+    response: T
+  ): T & { persona?: string; suggestions?: string[] } {
+    if (!persona) {
+      return response;
+    }
+    const trimmedPrefix = persona.prefix ? `${persona.prefix} ` : '';
+    const enriched: T & { persona?: string; suggestions?: string[] } = {
+      ...response,
+      text: `${trimmedPrefix}${response.text}`,
+      persona: persona.label,
+      suggestions: persona.suggestions
+    };
+    return enriched;
+  }
 }
 
 const aiService = new AIService();
@@ -1050,7 +1234,9 @@ app.post('/api/chat', async (req, res) => {
       sender: 'ai',
       timestamp: new Date().toISOString(),
       markers: result.markers,
-      route: result.route
+      route: result.route,
+      persona: result.persona,
+      suggestions: result.suggestions
     };
 
     res.json(response);

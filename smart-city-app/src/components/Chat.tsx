@@ -95,10 +95,30 @@ export default function Chat({ onSendMessage, messages, isLoading }: ChatProps) 
                     : "bg-muted text-muted-foreground"
                 }`}
               >
-                <p className="text-sm">{message.text}</p>
+                {message.sender === "ai" && message.persona && (
+                  <p className="text-[10px] uppercase tracking-wide font-semibold text-blue-500 mb-1">
+                    {message.persona}
+                  </p>
+                )}
+                <p className="text-sm whitespace-pre-line">{message.text}</p>
                 <p className="text-xs opacity-70 mt-1">
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </p>
+                {message.sender === "ai" && message.suggestions && message.suggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {message.suggestions.map((suggestion) => (
+                      <Button
+                        key={suggestion}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuickAction(suggestion)}
+                        className="text-xs bg-background hover:bg-background/80 border-border"
+                      >
+                        {suggestion}
+                      </Button>
+                    ))}
+                  </div>
+                )}
                 {message.isLoading && (
                   <div className="flex items-center mt-2">
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
