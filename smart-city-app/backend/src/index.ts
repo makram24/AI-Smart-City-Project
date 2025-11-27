@@ -12,6 +12,8 @@ import { publicTransportService } from './transport';
 import { sharedMobilityService } from './mobility';
 import { weatherService } from './weather';
 import { routingService } from './routing';
+import { isWithinBudapest, normalizeCoordinate, clampToBudapest, BUDAPEST_BOUNDS } from './utils/geoValidation';
+import { InMemoryCache } from './utils/cache';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,19 +31,34 @@ app.use(express.json());
 class GeospatialService {
   private nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
   private overpassBaseUrl = 'https://overpass-api.de/api/interpreter';
+  private geocodeCache = new InMemoryCache<string, any>(5 * 60 * 1000);
+  private placesCache = new InMemoryCache<string, any[]>(2 * 60 * 1000);
+  private reverseCache = new InMemoryCache<string, string>(10 * 60 * 1000);
+  private historicalCache = new InMemoryCache<string, any[]>(5 * 60 * 1000);
+
+  private buildCacheKey(prefix: string, ...values: Array<string | number>): string {
+    return `${prefix}:${values.join(':').toLowerCase()}`;
+  }
 
   async geocode(address: string): Promise<any> {
     try {
+      const trimmed = address.trim();
+      const cacheKey = this.buildCacheKey('geocode', trimmed);
+      const cached = this.geocodeCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       // ALWAYS search in Budapest, Hungary context
       // First try with explicit Budapest context
       let response = await axios.get(`${this.nominatimBaseUrl}/search`, {
         params: {
-          q: address + ', Budapest, Hungary',
+          q: `${trimmed}, Budapest, Hungary`,
           format: 'json',
           limit: 10,
           countrycodes: 'hu',
           addressdetails: 1,
-          viewbox: '19.0,47.6,19.3,47.4', // Budapest city center bounding box [min_lng, max_lat, max_lng, min_lat]
+          viewbox: `${BUDAPEST_BOUNDS.lngMin},${BUDAPEST_BOUNDS.latMax},${BUDAPEST_BOUNDS.lngMax},${BUDAPEST_BOUNDS.latMin}`,
           bounded: 1
         },
         headers: {
@@ -53,7 +70,7 @@ class GeospatialService {
       if (!response.data || response.data.length === 0) {
         response = await axios.get(`${this.nominatimBaseUrl}/search`, {
           params: {
-            q: address + ', Hungary',
+            q: `${trimmed}, Hungary`,
             format: 'json',
             limit: 10,
             countrycodes: 'hu',
@@ -74,10 +91,10 @@ class GeospatialService {
           const displayName = (item.display_name || '').toLowerCase();
           
           // Validate coordinates are in Budapest area (strict check)
-          const isInBudapest = lat >= 47.3 && lat <= 47.7 && lng >= 18.9 && lng <= 19.4;
+          const isInBuda = isWithinBudapest(lat, lng);
           const mentionsBudapest = displayName.includes('budapest') || displayName.includes('hungary');
           
-          if (isInBudapest || mentionsBudapest) {
+          if (isInBuda || mentionsBudapest) {
             result = item;
             break;
           }
@@ -90,7 +107,7 @@ class GeospatialService {
           const lng = parseFloat(result.lon);
           
           // Reject if clearly outside Budapest
-          if (lat < 47.3 || lat > 47.7 || lng < 18.9 || lng > 19.4) {
+          if (!isWithinBudapest(lat, lng)) {
             console.error(`❌ Rejected geocoding result outside Budapest: [${lat}, ${lng}] for "${address}"`);
             return null;
           }
@@ -103,16 +120,18 @@ class GeospatialService {
         console.log(`   Coordinates: [${lat}, ${lng}]`);
         
         // Final validation - MUST be in Budapest area
-        if (lat < 47.3 || lat > 47.7 || lng < 18.9 || lng > 19.4) {
+        if (!isWithinBudapest(lat, lng)) {
           console.error(`❌ Invalid coordinates for Budapest: [${lat}, ${lng}] - REJECTING`);
           return null;
         }
 
-        return {
+        const payload = {
           lat: lat,
           lng: lng,
           display_name: result.display_name
         };
+        this.geocodeCache.set(cacheKey, payload);
+        return payload;
       }
       return null;
     } catch (error) {
@@ -124,12 +143,17 @@ class GeospatialService {
   async searchPlaces(query: string, lat: number, lng: number, radius: number = 1000): Promise<any[]> {
     try {
       // STRICT: Only allow searches within Budapest area
-      if (lat < 47.3 || lat > 47.7 || lng < 18.9 || lng > 19.4) {
+      if (!isWithinBudapest(lat, lng)) {
         console.warn(`⚠️ Place search location [${lat}, ${lng}] is outside Budapest area - restricting to Budapest`);
         // Force search to Budapest center if location is outside
-        lat = 47.4979; // Budapest center
-        lng = 19.0402;
+        [lat, lng] = [47.4979, 19.0402];
         console.log(`   Using Budapest center [${lat}, ${lng}] for search`);
+      }
+
+      const cacheKey = this.buildCacheKey('places', query, lat, lng, radius);
+      const cached = this.placesCache.get(cacheKey);
+      if (cached) {
+        return cached;
       }
       
       const amenityMap: { [key: string]: string } = {
@@ -149,8 +173,7 @@ class GeospatialService {
       const amenity = amenityMap[query.toLowerCase()] || 'restaurant';
       
       // STRICT Budapest bounding box: [south, west, north, east]
-      // Budapest city limits: South: 47.3, North: 47.7, West: 18.9, East: 19.4
-      const budapestBbox = '47.3,18.9,47.7,19.4';
+      const budapestBbox = `${BUDAPEST_BOUNDS.latMin},${BUDAPEST_BOUNDS.lngMin},${BUDAPEST_BOUNDS.latMax},${BUDAPEST_BOUNDS.lngMax}`;
       
       // Use bounding box to STRICTLY restrict search to Budapest area only
       const overpassQuery = `
@@ -177,16 +200,17 @@ class GeospatialService {
         if (!placeLat || !placeLng) return false;
         
         // Strict Budapest validation
-        const isInBudapest = placeLat >= 47.3 && placeLat <= 47.7 && placeLng >= 18.9 && placeLng <= 19.4;
+        const isInBudapestBounds = isWithinBudapest(placeLat, placeLng);
         
-        if (!isInBudapest) {
+        if (!isInBudapestBounds) {
           console.warn(`⚠️ Filtered out place outside Budapest: [${placeLat}, ${placeLng}]`);
         }
         
-        return isInBudapest;
+        return isInBudapestBounds;
       });
 
       console.log(`📍 Found ${results.length} places in Budapest for "${query}"`);
+      this.placesCache.set(cacheKey, results);
       return results;
     } catch (error) {
       console.error('Places search error:', error);
@@ -196,6 +220,12 @@ class GeospatialService {
 
   async reverseGeocode(lat: number, lng: number): Promise<string | null> {
     try {
+      const cacheKey = this.buildCacheKey('reverse', lat, lng);
+      const cached = this.reverseCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       const response = await axios.get(`${this.nominatimBaseUrl}/reverse`, {
         params: {
           lat,
@@ -209,6 +239,7 @@ class GeospatialService {
       });
 
       if (response.data && response.data.display_name) {
+        this.reverseCache.set(cacheKey, response.data.display_name);
         return response.data.display_name;
       }
       return null;
@@ -220,6 +251,12 @@ class GeospatialService {
 
   async getPharmacies(lat: number, lng: number, radius: number = 1000): Promise<any[]> {
     try {
+      const cacheKey = this.buildCacheKey('pharmacies', lat, lng, radius);
+      const cached = this.placesCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       const overpassQuery = `
         [out:json][timeout:25];
         (
@@ -236,7 +273,9 @@ class GeospatialService {
         }
       });
 
-      return response.data.elements || [];
+      const results = response.data.elements || [];
+      this.placesCache.set(cacheKey, results);
+      return results;
     } catch (error) {
       console.error('Pharmacies search error:', error);
       return [];
@@ -245,6 +284,12 @@ class GeospatialService {
 
   async getRestaurants(lat: number, lng: number, radius: number = 1000): Promise<any[]> {
     try {
+      const cacheKey = this.buildCacheKey('restaurants', lat, lng, radius);
+      const cached = this.placesCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       const overpassQuery = `
         [out:json][timeout:25];
         (
@@ -261,7 +306,9 @@ class GeospatialService {
         }
       });
 
-      return response.data.elements || [];
+      const results = response.data.elements || [];
+      this.placesCache.set(cacheKey, results);
+      return results;
     } catch (error) {
       console.error('Restaurants search error:', error);
       return [];
@@ -270,6 +317,12 @@ class GeospatialService {
 
   async getHistoricalPlaces(lat: number, lng: number, radius: number = 5000): Promise<any[]> {
     try {
+      const cacheKey = this.buildCacheKey('historical', lat, lng, radius);
+      const cached = this.historicalCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       // Search for historical places, monuments, landmarks in Budapest
       const overpassQuery = `
         [out:json][timeout:25];
@@ -293,7 +346,9 @@ class GeospatialService {
         }
       });
 
-      return response.data.elements || [];
+      const results = response.data.elements || [];
+      this.historicalCache.set(cacheKey, results);
+      return results;
     } catch (error) {
       console.error('Historical places search error:', error);
       return [];
@@ -968,7 +1023,7 @@ app.get('/api/places/search', async (req, res) => {
     const searchLng = parseFloat(lng as string);
     
     // STRICT: Validate search location is in Budapest
-    if (searchLat < 47.3 || searchLat > 47.7 || searchLng < 18.9 || searchLng > 19.4) {
+    if (!isWithinBudapest(searchLat, searchLng)) {
       console.warn(`⚠️ Place search requested outside Budapest: [${searchLat}, ${searchLng}]`);
       // Use Budapest center instead
       const budapestCenter = { lat: 47.4979, lng: 19.0402 };
@@ -982,25 +1037,26 @@ app.get('/api/places/search', async (req, res) => {
       );
       
       const formattedPlaces = places.map((place: any) => {
-        const placeLat = place.lat || place.center?.lat;
-        const placeLng = place.lon || place.center?.lon;
-        
-        // Final validation - ensure place is in Budapest
-        if (placeLat < 47.3 || placeLat > 47.7 || placeLng < 18.9 || placeLng > 19.4) {
+        const rawCoord: [number, number] | null = [
+          place.lat || place.center?.lat,
+          place.lon || place.center?.lon
+        ];
+        const coords = normalizeCoordinate(rawCoord as any);
+        if (!coords) {
           return null;
         }
-        
+
         return {
           id: place.id,
           name: place.tags?.name || 'Unknown Place',
           type: place.tags?.amenity || 'place',
-          position: [placeLat, placeLng],
+          position: coords,
           description: place.tags?.opening_hours || place.tags?.cuisine || 'No additional info',
           distance: geospatialService.calculateDistance(
             budapestCenter.lat, 
             budapestCenter.lng,
-            placeLat,
-            placeLng
+            coords[0],
+            coords[1]
           ).toFixed(1) + ' km'
         };
       }).filter((place: any) => place !== null);
@@ -1022,16 +1078,13 @@ app.get('/api/places/search', async (req, res) => {
     );
 
     const formattedPlaces = places.map((place: any) => {
-      const placeLat = place.lat || place.center?.lat;
-      const placeLng = place.lon || place.center?.lon;
-      
-      // STRICT: Final validation - ensure place is in Budapest
-      if (!placeLat || !placeLng) {
-        return null;
-      }
-      
-      if (placeLat < 47.3 || placeLat > 47.7 || placeLng < 18.9 || placeLng > 19.4) {
-        console.warn(`⚠️ Filtered out place outside Budapest: [${placeLat}, ${placeLng}]`);
+      const rawCoord: [number, number] | null = [
+        place.lat || place.center?.lat,
+        place.lon || place.center?.lon
+      ];
+      const coords = normalizeCoordinate(rawCoord as any);
+      if (!coords) {
+        console.warn(`⚠️ Filtered out place outside Budapest:`, rawCoord);
         return null;
       }
       
@@ -1039,13 +1092,13 @@ app.get('/api/places/search', async (req, res) => {
         id: place.id,
         name: place.tags?.name || 'Unknown Place',
         type: place.tags?.amenity || 'place',
-        position: [placeLat, placeLng],
+        position: coords,
         description: place.tags?.opening_hours || place.tags?.cuisine || 'No additional info',
         distance: geospatialService.calculateDistance(
           searchLat, 
           searchLng,
-          placeLat,
-          placeLng
+          coords[0],
+          coords[1]
         ).toFixed(1) + ' km'
       };
     }).filter((place: any) => place !== null);
