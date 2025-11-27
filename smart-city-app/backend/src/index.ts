@@ -699,11 +699,12 @@ class AIService {
     text: string;
     markers: any[];
     route?: any;
-    persona?: string;
+    persona?: PersonaPayload;
     suggestions?: string[];
   }> {
     const lowerMessage = message.toLowerCase();
     let personaContext = this.detectPersona(lowerMessage) || this.getPersonaById('local_concierge');
+    const personaFallbackText = personaContext?.fallbackMessage || 'I can help you find places, get directions, check transport schedules, and discover what\'s happening in Budapest. Could you be more specific about what you need?';
 
     // Route/Directions queries - check for various route-related phrases
     if (lowerMessage.includes('route') || lowerMessage.includes('direction') || 
@@ -792,13 +793,13 @@ class AIService {
     // Fallback responses
     if (lowerMessage.includes('budapest') || lowerMessage.includes('city')) {
       return this.applyPersona(personaContext, {
-        text: 'Welcome to Budapest! I can help you find places, get directions, check public transport schedules, and discover local events. What would you like to know?',
+        text: personaFallbackText,
         markers: []
       });
     }
 
     return this.applyPersona(personaContext, {
-      text: 'I can help you find places, get directions, check transport schedules, and discover what\'s happening in Budapest. Could you be more specific about what you need?',
+      text: personaFallbackText,
       markers: []
     });
   }
