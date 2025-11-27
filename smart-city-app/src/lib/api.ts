@@ -16,7 +16,19 @@ export interface MapMarker {
   position: [number, number];
   title: string;
   description?: string;
-  type?: 'pharmacy' | 'restaurant' | 'bank' | 'metro' | 'bus' | 'tram' | 'bike_station';
+  type?:
+    | 'pharmacy'
+    | 'restaurant'
+    | 'bank'
+    | 'metro'
+    | 'bus'
+    | 'tram'
+    | 'bike_station'
+    | 'playbook'
+    | 'highlight'
+    | 'historical'
+    | 'landmark'
+    | 'viewpoint';
   icon?: string;
   rating?: number;
   hours?: string;
@@ -90,6 +102,29 @@ export interface WeatherContext {
   isGoodForCycling: boolean;
   isGoodForWalking: boolean;
   recommendations: string[];
+}
+
+export interface PlaybookSummary {
+  id: string;
+  title: string;
+  persona: string;
+  tagline: string;
+  durationLabel: string;
+  distanceLabel: string;
+  focusArea: string;
+  heroImage: string;
+  tags: string[];
+  bestFor: string[];
+}
+
+export interface PlaybookDetail extends PlaybookSummary {
+  narrative: string;
+  mood: string;
+  recommendedPrompts: string[];
+  highlightStops: string[];
+  insights: string[];
+  markers: MapMarker[];
+  primaryRoute: RouteData;
 }
 
 class ApiService {
@@ -261,6 +296,34 @@ class ApiService {
     } catch (error) {
       console.error('Weather alerts API error:', error);
       return [];
+    }
+  }
+
+  // Playbooks API
+  async getPlaybooks(): Promise<PlaybookSummary[]> {
+    try {
+      const response = await this.api.get('/api/playbooks');
+      return response.data.playbooks || [];
+    } catch (error) {
+      console.error('Playbooks API error:', error);
+      return [];
+    }
+  }
+
+  async getPlaybookById(
+    id: string,
+    userLocation?: { lat: number; lng: number }
+  ): Promise<PlaybookDetail | null> {
+    try {
+      const response = await this.api.get(`/api/playbooks/${id}`, {
+        params: userLocation
+          ? { userLat: userLocation.lat, userLng: userLocation.lng }
+          : undefined
+      });
+      return response.data.playbook || null;
+    } catch (error) {
+      console.error(`Playbook detail API error (${id}):`, error);
+      return null;
     }
   }
 

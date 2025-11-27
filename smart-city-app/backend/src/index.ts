@@ -12,7 +12,8 @@ import { publicTransportService } from './transport';
 import { sharedMobilityService } from './mobility';
 import { weatherService } from './weather';
 import { routingService } from './routing';
-import { isWithinBudapest, normalizeCoordinate, clampToBudapest, BUDAPEST_BOUNDS } from './utils/geoValidation';
+import { neighborhoodPlaybookService } from './playbooks';
+import { isWithinBudapest, normalizeCoordinate, BUDAPEST_BOUNDS } from './utils/geoValidation';
 import { InMemoryCache } from './utils/cache';
 
 const app = express();
@@ -979,6 +980,58 @@ app.get('/api/health', (req, res) => {
     version: '3.0.0',
     phase: 'Phase 3 - Advanced Features'
   });
+});
+
+// Neighborhood playbooks
+app.get('/api/playbooks', (req, res) => {
+  const playbooks = neighborhoodPlaybookService.getSummaries();
+  res.json({
+    playbooks,
+    count: playbooks.length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/playbooks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const playbook = neighborhoodPlaybookService.getPlaybookById(id);
+
+    if (!playbook) {
+      return res.status(404).json({ error: 'Playbook not found', id });
+    }
+
+    const userLat = req.query.userLat ? parseFloat(req.query.userLat as string) : undefined;
+    const userLng = req.query.userLng ? parseFloat(req.query.userLng as string) : undefined;
+    let primaryRoute = playbook.primaryRoute;
+
+    if (
+      typeof userLat === 'number' &&
+      typeof userLng === 'number' &&
+      !Number.isNaN(userLat) &&
+      !Number.isNaN(userLng)
+    ) {
+      if (isWithinBudapest(userLat, userLng)) {
+        primaryRoute = await neighborhoodPlaybookService.personalizeRoute(playbook, userLat, userLng);
+      } else {
+        console.warn(`⚠️ Playbook personalization requested outside Budapest: [${userLat}, ${userLng}]`);
+      }
+    }
+
+    res.json({
+      playbook: {
+        ...playbook,
+        primaryRoute
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Playbook detail error:', error);
+    res.status(500).json({
+      error: 'Failed to load playbook',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Enhanced chat endpoint with AI integration

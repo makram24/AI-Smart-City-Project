@@ -41,6 +41,11 @@ const icons = {
   bus: createCustomIcon('#2563eb'), // blue
   tram: createCustomIcon('#059669'), // green
   bike_station: createCustomIcon('#7c3aed'), // purple
+  playbook: createCustomIcon('#0ea5e9'), // sky
+  highlight: createCustomIcon('#ec4899'), // pink
+  historical: createCustomIcon('#9333ea'), // violet
+  landmark: createCustomIcon('#f97316'), // orange
+  viewpoint: createCustomIcon('#22d3ee'), // teal
   default: createCustomIcon('#6b7280'), // gray
   destination: createCustomIcon('#8b5cf6'), // purple
   user: createCustomIcon('#06b6d4') // cyan

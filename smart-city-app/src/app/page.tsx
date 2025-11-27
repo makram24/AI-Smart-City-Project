@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import Chat from "@/components/Chat";
 import TransportPanel from "@/components/TransportPanel";
 import MapFilters from "@/components/MapFilters";
-import { apiService, ChatMessage, MapMarker } from "@/lib/api";
+import { NeighborhoodPlaybooks } from "@/components/NeighborhoodPlaybooks";
+import { apiService, ChatMessage, MapMarker, PlaybookSummary, PlaybookDetail } from "@/lib/api";
 import { isWithinBudapest, normalizeCoordinate } from "@/lib/geoValidation";
 
 // Dynamically import Map to avoid SSR issues
@@ -39,6 +40,9 @@ export default function Home() {
     categories: [],
     maxDistance: 2
   });
+  const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
+  const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookDetail | null>(null);
+  const [loadingPlaybookId, setLoadingPlaybookId] = useState<string | null>(null);
 
   const sanitizeRoute = (route?: ChatMessage["route"] | null) => {
     if (!route || !route.polyline) {
@@ -70,6 +74,30 @@ export default function Home() {
     };
     checkApi();
   }, []);
+
+  useEffect(() => {
+    if (!apiConnected) {
+      return;
+    }
+
+    let isMounted = true;
+    const loadPlaybooks = async () => {
+      try {
+        const list = await apiService.getPlaybooks();
+        if (isMounted) {
+          setPlaybooks(list);
+        }
+      } catch (error) {
+        console.error('Failed to fetch playbooks:', error);
+      }
+    };
+
+    loadPlaybooks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiConnected]);
 
   // Get user location on mount
   useEffect(() => {
@@ -258,6 +286,65 @@ export default function Home() {
     return newMarkers;
   };
 
+  const handlePlaybookSelect = async (playbookId: string) => {
+    if (!apiConnected) {
+      const warningMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Neighborhood playbooks need the backend connection. Please reconnect and try again.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, warningMessage]);
+      return;
+    }
+
+    setLoadingPlaybookId(playbookId);
+    try {
+      const detail = await apiService.getPlaybookById(playbookId, userLocation || undefined);
+      if (!detail) {
+        throw new Error('Playbook not found');
+      }
+
+      setSelectedPlaybook(detail);
+
+      if (detail.markers && detail.markers.length > 0) {
+        setMapMarkers(detail.markers);
+      }
+
+      const formattedRoute = sanitizeRoute(detail.primaryRoute);
+      setCurrentRoute(formattedRoute);
+
+      const highlights = detail.highlightStops
+        .slice(0, 3)
+        .map(stop => `• ${stop}`)
+        .join(' ');
+
+      const narrativeMessage: ChatMessage = {
+        id: (Date.now() + 3).toString(),
+        text: `${detail.narrative}${highlights ? ` Highlights: ${highlights}` : ''}`,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, narrativeMessage]);
+    } catch (error) {
+      console.error('Playbook select error:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 4).toString(),
+        text: 'Sorry, I could not load that playbook right now. Please try again in a bit.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoadingPlaybookId(null);
+    }
+  };
+
+  const handlePlaybookPrompt = (prompt: string) => {
+    handleSendMessage(prompt);
+  };
+
   const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
     if (!userLocation) {
       console.warn('User location not available for route planning');
@@ -348,7 +435,7 @@ export default function Home() {
   return (
     <div className="h-screen flex">
       {/* Map Section - Left Side */}
-      <div className="flex-1 h-full">
+      <div className="flex-1 h-full relative">
         <Map 
           center={userLocation ? [userLocation.lat, userLocation.lng] : [47.4979, 19.0402]} // Leaflet format: [lat, lng]
           zoom={13}
@@ -359,6 +446,13 @@ export default function Home() {
         <MapFilters 
           onFiltersChange={setMapFilters}
           userLocation={userLocation}
+        />
+        <NeighborhoodPlaybooks 
+          playbooks={playbooks}
+          selectedId={selectedPlaybook?.id || null}
+          loadingId={loadingPlaybookId}
+          disabled={!apiConnected}
+          onSelect={handlePlaybookSelect}
         />
       </div>
       
@@ -408,12 +502,47 @@ export default function Home() {
       </div>
       
       {/* Chat Section - Right Side */}
-      <div className="w-96 h-full">
-        <Chat 
-          onSendMessage={handleSendMessage}
-          messages={messages}
-          isLoading={isLoading}
-        />
+      <div className="w-96 h-full relative flex flex-col">
+        <div className="flex-1 min-h-0">
+          <Chat 
+            onSendMessage={handleSendMessage}
+            messages={messages}
+            isLoading={isLoading}
+          />
+        </div>
+        {selectedPlaybook && (
+          <div className="border-t border-border bg-white p-4 space-y-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">
+                {selectedPlaybook.persona}
+              </p>
+              <h3 className="text-sm font-semibold text-gray-900">
+                {selectedPlaybook.title}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {selectedPlaybook.mood}
+              </p>
+            </div>
+            <div className="space-y-1">
+              {selectedPlaybook.highlightStops.slice(0, 3).map((stop) => (
+                <p key={stop} className="text-xs text-gray-600">
+                  • {stop}
+                </p>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedPlaybook.recommendedPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => handlePlaybookPrompt(prompt)}
+                  className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* API Status Indicator */}
         <div className="absolute bottom-2 right-2">
