@@ -137,6 +137,61 @@ export interface PlaybookDetail extends PlaybookSummary {
   primaryRoute: RouteData;
 }
 
+export interface MoodboardSuggestion {
+  id: string;
+  type: 'weather' | 'transport' | 'activity' | 'safety' | 'event';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  icon: string;
+  action?: {
+    label: string;
+    type: 'route' | 'search' | 'info';
+    data?: any;
+  };
+  timestamp: string;
+}
+
+export interface MoodboardContext {
+  weather: any;
+  weatherContext: {
+    isGoodForCycling: boolean;
+    isGoodForWalking: boolean;
+    recommendations: string[];
+  } | null;
+  transportStatus: {
+    hasDisruptions: boolean;
+    disruptionCount: number;
+    nearbyStops: number;
+  };
+  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+  dayOfWeek: string;
+  suggestions: MoodboardSuggestion[];
+}
+
+export interface StoryCard {
+  id: string;
+  landmarkId: string;
+  landmarkName: string;
+  position: [number, number];
+  title: string;
+  narrative: string;
+  audioUrl?: string;
+  imageUrl?: string;
+  duration: number;
+  category: 'history' | 'architecture' | 'culture' | 'legend' | 'event';
+  triggerDistance: number;
+  tags: string[];
+}
+
+export interface StoryTrigger {
+  storyId: string;
+  landmarkName: string;
+  position: [number, number];
+  distance: number;
+  shouldShow: boolean;
+}
+
 class ApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
@@ -334,6 +389,76 @@ class ApiService {
     } catch (error) {
       console.error(`Playbook detail API error (${id}):`, error);
       return null;
+    }
+  }
+
+  // Moodboard API
+  async getMoodboard(userLocation?: { lat: number; lng: number }): Promise<MoodboardContext | null> {
+    try {
+      const response = await this.api.get('/api/moodboard', {
+        params: userLocation
+          ? { lat: userLocation.lat, lng: userLocation.lng }
+          : undefined
+      });
+      return response.data.moodboard || null;
+    } catch (error) {
+      console.error('Moodboard API error:', error);
+      return null;
+    }
+  }
+
+  // Stories API
+  async getStories(category?: string): Promise<StoryCard[]> {
+    try {
+      const response = await this.api.get('/api/stories', {
+        params: category ? { category } : undefined
+      });
+      return response.data.stories || [];
+    } catch (error) {
+      console.error('Stories API error:', error);
+      return [];
+    }
+  }
+
+  async getStoryById(id: string): Promise<StoryCard | null> {
+    try {
+      const response = await this.api.get(`/api/stories/${id}`);
+      return response.data.story || null;
+    } catch (error) {
+      console.error(`Story detail API error (${id}):`, error);
+      return null;
+    }
+  }
+
+  async getStoriesNearRoute(
+    polyline: number[][],
+    maxDistance: number = 500
+  ): Promise<StoryTrigger[]> {
+    try {
+      const response = await this.api.post('/api/stories/near-route', {
+        polyline,
+        maxDistance
+      });
+      return response.data.triggers || [];
+    } catch (error) {
+      console.error('Stories near route API error:', error);
+      return [];
+    }
+  }
+
+  async getStoriesNearPoint(
+    lat: number,
+    lng: number,
+    radius: number = 1000
+  ): Promise<StoryCard[]> {
+    try {
+      const response = await this.api.get('/api/stories/near-point', {
+        params: { lat, lng, radius }
+      });
+      return response.data.stories || [];
+    } catch (error) {
+      console.error('Stories near point API error:', error);
+      return [];
     }
   }
 

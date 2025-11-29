@@ -13,6 +13,8 @@ import { sharedMobilityService } from './mobility';
 import { weatherService } from './weather';
 import { routingService } from './routing';
 import { neighborhoodPlaybookService } from './playbooks';
+import { moodboardService } from './moodboard';
+import { storyService } from './stories';
 import { isWithinBudapest, normalizeCoordinate, BUDAPEST_BOUNDS } from './utils/geoValidation';
 import { InMemoryCache } from './utils/cache';
 
@@ -2019,6 +2021,158 @@ app.get('/api/weather/alerts', async (req, res) => {
     console.error('Weather alerts error:', error);
     res.status(500).json({ 
       error: 'Failed to fetch weather alerts',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Dynamic City Moodboard endpoint
+app.get('/api/moodboard', async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    const userLocation = lat && lng 
+      ? { lat: parseFloat(lat as string), lng: parseFloat(lng as string) }
+      : undefined;
+
+    if (userLocation && !isWithinBudapest(userLocation.lat, userLocation.lng)) {
+      console.warn(`⚠️ Moodboard requested outside Budapest: [${userLocation.lat}, ${userLocation.lng}]`);
+      // Still generate moodboard but without location-specific features
+      const moodboard = await moodboardService.generateMoodboard();
+      return res.json({
+        moodboard,
+        timestamp: new Date().toISOString(),
+        note: 'Location outside Budapest - general suggestions only'
+      });
+    }
+
+    const moodboard = await moodboardService.generateMoodboard(userLocation);
+    res.json({
+      moodboard,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Moodboard error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate moodboard',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Augmented Map Stories endpoints
+app.get('/api/stories', (req, res) => {
+  try {
+    const { category } = req.query;
+    const stories = category
+      ? storyService.getStoriesByCategory(category as any)
+      : storyService.getAllStories();
+    
+    res.json({
+      stories,
+      count: stories.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Stories list error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch stories',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/stories/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const story = storyService.getStoryById(id);
+    
+    if (!story) {
+      return res.status(404).json({ error: 'Story not found', id });
+    }
+    
+    res.json({
+      story,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Story detail error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch story',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.post('/api/stories/near-route', (req, res) => {
+  try {
+    const { polyline, maxDistance = 500 } = req.body;
+    
+    if (!polyline || !Array.isArray(polyline) || polyline.length < 2) {
+      return res.status(400).json({
+        error: 'Invalid route polyline. Expected array of [lat, lng] coordinates.'
+      });
+    }
+
+    // Validate coordinates are in Budapest
+    const invalidCoords = polyline.some((coord: any) => {
+      if (!Array.isArray(coord) || coord.length < 2) return true;
+      const [lat, lng] = coord;
+      return !isWithinBudapest(lat, lng);
+    });
+
+    if (invalidCoords) {
+      return res.status(400).json({
+        error: 'Route coordinates must be within Budapest area'
+      });
+    }
+
+    const triggers = storyService.getStoriesNearRoute(polyline, maxDistance);
+    
+    res.json({
+      triggers,
+      count: triggers.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Stories near route error:', error);
+    res.status(500).json({
+      error: 'Failed to find stories near route',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/stories/near-point', (req, res) => {
+  try {
+    const { lat, lng, radius = 1000 } = req.query;
+    
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const pointLat = parseFloat(lat as string);
+    const pointLng = parseFloat(lng as string);
+    
+    if (!isWithinBudapest(pointLat, pointLng)) {
+      return res.status(400).json({ error: 'Point must be within Budapest area' });
+    }
+
+    const stories = storyService.getStoriesNearPoint(
+      [pointLat, pointLng],
+      parseInt(radius as string)
+    );
+    
+    res.json({
+      stories,
+      count: stories.length,
+      location: { lat: pointLat, lng: pointLng },
+      radius: parseInt(radius as string),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Stories near point error:', error);
+    res.status(500).json({
+      error: 'Failed to find stories near point',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

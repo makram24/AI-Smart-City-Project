@@ -6,7 +6,9 @@ import Chat from "@/components/Chat";
 import TransportPanel from "@/components/TransportPanel";
 import MapFilters from "@/components/MapFilters";
 import { NeighborhoodPlaybooks } from "@/components/NeighborhoodPlaybooks";
-import { apiService, ChatMessage, MapMarker, PlaybookSummary, PlaybookDetail, PersonaContext } from "@/lib/api";
+import Moodboard from "@/components/Moodboard";
+import StoryCardComponent from "@/components/StoryCard";
+import { apiService, ChatMessage, MapMarker, PlaybookSummary, PlaybookDetail, PersonaContext, MoodboardSuggestion, StoryCard, StoryTrigger } from "@/lib/api";
 import { isWithinBudapest, normalizeCoordinate } from "@/lib/geoValidation";
 
 // Dynamically import Map to avoid SSR issues
@@ -56,6 +58,8 @@ export default function Home() {
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookDetail | null>(null);
   const [loadingPlaybookId, setLoadingPlaybookId] = useState<string | null>(null);
   const [activePersona, setActivePersona] = useState<PersonaContext | null>(null);
+  const [activeStory, setActiveStory] = useState<StoryCard | null>(null);
+  const [storyTriggers, setStoryTriggers] = useState<StoryTrigger[]>([]);
 
   const sanitizeRoute = (route?: ChatMessage["route"] | null) => {
     if (!route || !route.polyline) {
@@ -111,6 +115,42 @@ export default function Home() {
       isMounted = false;
     };
   }, [apiConnected]);
+
+  // Check for stories near route when route changes
+  useEffect(() => {
+    if (!apiConnected || !currentRoute || !currentRoute.polyline || currentRoute.polyline.length < 2) {
+      setStoryTriggers([]);
+      setActiveStory(null);
+      return;
+    }
+
+    let isMounted = true;
+    const checkStories = async () => {
+      try {
+        const triggers = await apiService.getStoriesNearRoute(currentRoute.polyline, 500);
+        if (!isMounted) return;
+        
+        setStoryTriggers(triggers);
+
+        // Auto-show the closest story if it should be shown
+        const closestTrigger = triggers.find(t => t.shouldShow);
+        if (closestTrigger) {
+          const story = await apiService.getStoryById(closestTrigger.storyId);
+          if (story && isMounted) {
+            setActiveStory(story);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check stories near route:', error);
+      }
+    };
+
+    checkStories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentRoute, apiConnected]);
 
   // Get user location on mount
   useEffect(() => {
@@ -369,6 +409,37 @@ export default function Home() {
     handleSendMessage(prompt);
   };
 
+  const handleMoodboardSuggestion = async (suggestion: MoodboardSuggestion) => {
+    if (!suggestion.action) return;
+
+    if (suggestion.action.type === 'search' && suggestion.action.data?.query) {
+      // Trigger a search query
+      handleSendMessage(suggestion.action.data.query);
+    } else if (suggestion.action.type === 'route' && suggestion.action.data?.mode) {
+      // For route suggestions, we'd need a destination - could prompt user or use a default
+      if (userLocation) {
+        // Example: suggest a route to a popular destination based on mode
+        const destinations: { [key: string]: string } = {
+          walking: 'Buda Castle',
+          cycling: 'City Park',
+          public_transport: 'Parliament'
+        };
+        const destination = destinations[suggestion.action.data.mode] || 'City Center';
+        handleRouteRequest(suggestion.action.data.mode as any, destination);
+      }
+    } else if (suggestion.action.type === 'info') {
+      // Show info in chat
+      const infoMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: suggestion.description,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, infoMessage]);
+    }
+  };
+
   const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
     if (!userLocation) {
       console.warn('User location not available for route planning');
@@ -481,6 +552,35 @@ export default function Home() {
           disabled={!apiConnected}
           onSelect={handlePlaybookSelect}
         />
+        {apiConnected && (
+          <Moodboard 
+            userLocation={userLocation}
+            onSuggestionAction={handleMoodboardSuggestion}
+          />
+        )}
+        {activeStory && (
+          <StoryCardComponent
+            story={activeStory}
+            onClose={() => setActiveStory(null)}
+            onNavigate={() => {
+              // Center map on story location
+              if (activeStory.position) {
+                // The Map component will handle this via center prop if we update userLocation
+                // For now, we can add a marker or just close and let user explore
+                setMapMarkers(prev => {
+                  const existing = prev.find(m => m.title === activeStory.landmarkName);
+                  if (existing) return prev;
+                  return [...prev, {
+                    position: activeStory.position,
+                    title: activeStory.landmarkName,
+                    description: activeStory.title,
+                    type: 'historical' as any
+                  }];
+                });
+              }
+            }}
+          />
+        )}
       </div>
       
       {/* Transport Panel - Middle */}
