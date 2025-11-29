@@ -424,7 +424,18 @@ export default function Home() {
     }
 
     if (suggestion.action.type === 'search' && suggestion.action.data?.query) {
-      // Trigger a search query - this will automatically update chat and map
+      const query = suggestion.action.data.query.toLowerCase();
+      
+      // Special handling for museums and thermal baths - show on map immediately
+      if (query.includes('museum') || query.includes('gallery')) {
+        await handleMuseumSearch();
+        return;
+      } else if (query.includes('thermal') || query.includes('bath') || query.includes('spa')) {
+        await handleThermalBathSearch();
+        return;
+      }
+      
+      // For other searches, trigger a search query - this will automatically update chat and map
       handleSendMessage(suggestion.action.data.query);
     } else if (suggestion.action.type === 'route' && suggestion.action.data?.mode) {
       // For route suggestions, determine destination based on mode and context
@@ -653,6 +664,182 @@ export default function Home() {
     }
   };
 
+  const handleMuseumSearch = async () => {
+    if (!userLocation) {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'I need your current location to find museums nearby. Please allow location access and try again.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Search for museums
+      const places = await apiService.searchPlaces('museum, gallery', userLocation.lat, userLocation.lng, 5000);
+      
+      if (places.length === 0) {
+        const noResultsMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: 'I couldn\'t find any museums nearby. Try searching in a different area or expand your search radius.',
+          sender: 'ai',
+          timestamp: new Date().toISOString(),
+          persona: activePersona || DEFAULT_PERSONA
+        };
+        setMessages(prev => [...prev, noResultsMessage]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Create markers for museums
+      const museumMarkers: MapMarker[] = places.map(place => ({
+        position: place.position,
+        title: place.name,
+        description: place.description,
+        type: 'landmark' as any
+      }));
+
+      // Update map markers
+      setMapMarkers(prev => {
+        // Remove old museum markers and add new ones
+        const filtered = prev.filter(m => m.type !== 'landmark' || (!m.title.toLowerCase().includes('museum') && !m.title.toLowerCase().includes('gallery')));
+        return [...filtered, ...museumMarkers];
+      });
+
+      // Create chat message
+      const museumList = places.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.distance})`).join('\n');
+      const museumMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: `🏛️ **Museums & Galleries Found**\n\nI found ${places.length} museum${places.length > 1 ? 's' : ''} and gallery${places.length > 1 ? 'ies' : ''} nearby:\n\n${museumList}${places.length > 5 ? `\n\n... and ${places.length - 5} more` : ''}\n\nClick on any marker on the map to get directions!`,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        markers: museumMarkers,
+        persona: activePersona || DEFAULT_PERSONA
+      };
+
+      setMessages(prev => [...prev, museumMessage]);
+    } catch (error) {
+      console.error('Museum search error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Sorry, I could not search for museums right now. Please try again in a bit.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleThermalBathSearch = async () => {
+    if (!userLocation) {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'I need your current location to find thermal baths nearby. Please allow location access and try again.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Search for thermal baths and spas
+      const places = await apiService.searchPlaces('thermal', userLocation.lat, userLocation.lng, 5000);
+      
+      // Filter results to ensure only thermal baths/spas (exclude restaurants)
+      const thermalBaths = places.filter(place => {
+        const name = place.name?.toLowerCase() || '';
+        const description = place.description?.toLowerCase() || '';
+        const type = place.type?.toLowerCase() || '';
+        
+        // Include if it's a spa, thermal bath, or has relevant keywords
+        const isThermalBath = 
+          type === 'spa' ||
+          type === 'leisure' ||
+          name.includes('thermal') ||
+          name.includes('bath') ||
+          name.includes('fürdő') ||
+          name.includes('spa') ||
+          description.includes('thermal') ||
+          description.includes('bath') ||
+          description.includes('spa');
+        
+        // Exclude restaurants
+        const isRestaurant = 
+          type === 'restaurant' ||
+          name.includes('restaurant') ||
+          name.includes('étterem') ||
+          description.includes('restaurant') ||
+          description.includes('food') ||
+          description.includes('cuisine');
+        
+        return isThermalBath && !isRestaurant;
+      });
+      
+      if (thermalBaths.length === 0) {
+        const noResultsMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: 'I couldn\'t find any thermal baths nearby. Try searching in a different area or expand your search radius.',
+          sender: 'ai',
+          timestamp: new Date().toISOString(),
+          persona: activePersona || DEFAULT_PERSONA
+        };
+        setMessages(prev => [...prev, noResultsMessage]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Create markers for thermal baths
+      const bathMarkers: MapMarker[] = thermalBaths.map(place => ({
+        position: place.position,
+        title: place.name,
+        description: place.description,
+        type: 'thermal_bath' as any
+      }));
+
+      // Update map markers
+      setMapMarkers(prev => {
+        // Remove old thermal bath markers and add new ones
+        const filtered = prev.filter(m => m.type !== 'thermal_bath' && m.type !== 'spa');
+        return [...filtered, ...bathMarkers];
+      });
+
+      // Create chat message
+      const bathList = thermalBaths.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.distance})`).join('\n');
+      const bathMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: `♨️ **Thermal Baths & Spas Found**\n\nI found ${thermalBaths.length} thermal bath${thermalBaths.length > 1 ? 's' : ''} and spa${thermalBaths.length > 1 ? 's' : ''} nearby:\n\n${bathList}${thermalBaths.length > 5 ? `\n\n... and ${thermalBaths.length - 5} more` : ''}\n\nClick on any marker on the map to get directions!`,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        markers: bathMarkers,
+        persona: activePersona || DEFAULT_PERSONA
+      };
+
+      setMessages(prev => [...prev, bathMessage]);
+    } catch (error) {
+      console.error('Thermal bath search error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Sorry, I could not search for thermal baths right now. Please try again in a bit.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRouteRequest = async (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => {
     if (!userLocation) {
       console.warn('User location not available for route planning');
@@ -753,6 +940,12 @@ export default function Home() {
           markers={mapMarkers}
           route={currentRoute || undefined}
           filters={mapFilters}
+          onMarkerClick={(position, title) => {
+            if (userLocation) {
+              const destination = `${position[0]},${position[1]}`;
+              handleRouteRequest('walking', destination);
+            }
+          }}
         />
         <MapFilters 
           onFiltersChange={setMapFilters}

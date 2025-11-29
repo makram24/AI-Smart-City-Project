@@ -46,6 +46,8 @@ const icons = {
   historical: createCustomIcon('#9333ea'), // violet
   landmark: createCustomIcon('#f97316'), // orange
   viewpoint: createCustomIcon('#22d3ee'), // teal
+  thermal_bath: createCustomIcon('#f97316', 24), // warm orange, slightly larger
+  spa: createCustomIcon('#f97316', 24), // warm orange, slightly larger
   default: createCustomIcon('#6b7280'), // gray
   destination: createCustomIcon('#8b5cf6'), // purple
   user: createCustomIcon('#06b6d4') // cyan
@@ -74,6 +76,7 @@ interface MapProps {
     categories: string[];
     maxDistance: number;
   };
+  onMarkerClick?: (position: [number, number], title: string) => void;
 }
 
 function MapController({ center, zoom, routeCoordinates }: { 
@@ -103,7 +106,7 @@ function MapController({ center, zoom, routeCoordinates }: {
   return null;
 }
 
-export default function Map({ center, zoom = 13, markers = [], route, filters }: MapProps) {
+export default function Map({ center, zoom = 13, markers = [], route, filters, onMarkerClick }: MapProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([47.4979, 19.0402]); // Budapest coordinates [lat, lng]
   const [isClient, setIsClient] = useState(false);
@@ -524,12 +527,23 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
                   
                   {userLocation && (
                     <div className="mt-2 pt-2 border-t border-gray-200">
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 mb-2">
                         Distance: {calculateDistance(
                           userLocation[0], userLocation[1],
                           marker.position[0], marker.position[1]
                         ).toFixed(1)} km
                       </div>
+                      {onMarkerClick && (
+                        <button
+                          onClick={() => onMarkerClick(marker.position, marker.title)}
+                          className="w-full mt-2 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                          Get Directions
+                        </button>
+                      )}
                     </div>
                   )}
                   </div>
@@ -575,6 +589,10 @@ export default function Map({ center, zoom = 13, markers = [], route, filters }:
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-violet-600"></div>
             <span className="text-xs">Bike Station</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+            <span className="text-xs">Thermal Bath</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-purple-500"></div>

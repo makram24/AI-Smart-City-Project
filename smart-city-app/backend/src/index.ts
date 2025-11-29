@@ -170,24 +170,83 @@ class GeospatialService {
         'bank': 'bank',
         'atm': 'atm',
         'hospital': 'hospital',
-        'clinic': 'clinic'
+        'clinic': 'clinic',
+        'spa': 'spa',
+        'thermal': 'spa',
+        'thermal bath': 'spa',
+        'thermal baths': 'spa',
+        'wellness': 'spa',
+        'museum': 'museum',
+        'museums': 'museum',
+        'gallery': 'museum',
+        'galleries': 'museum'
       };
 
-      const amenity = amenityMap[query.toLowerCase()] || 'restaurant';
+      // Check if query contains thermal bath keywords
+      const queryLower = query.toLowerCase();
+      let amenity = amenityMap[queryLower];
+      
+      // Handle multi-word queries
+      if (!amenity) {
+        if (queryLower.includes('thermal') || queryLower.includes('bath') || queryLower.includes('spa') || queryLower.includes('wellness')) {
+          amenity = 'spa';
+        } else if (queryLower.includes('museum') || queryLower.includes('gallery')) {
+          amenity = 'museum';
+        } else {
+          amenity = 'restaurant'; // default
+        }
+      }
       
       // STRICT Budapest bounding box: [south, west, north, east]
       const budapestBbox = `${BUDAPEST_BOUNDS.latMin},${BUDAPEST_BOUNDS.lngMin},${BUDAPEST_BOUNDS.latMax},${BUDAPEST_BOUNDS.lngMax}`;
       
       // Use bounding box to STRICTLY restrict search to Budapest area only
-      const overpassQuery = `
-        [out:json][timeout:25];
-        (
-          node["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
-          way["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
-          relation["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
-        );
-        out center;
-      `;
+      // For spa/thermal baths, also search by leisure=spa and tourism tags
+      let overpassQuery = '';
+      
+      if (amenity === 'spa') {
+        // Search for spas using multiple tags
+        overpassQuery = `
+          [out:json][timeout:25];
+          (
+            node["leisure"="spa"](around:${radius},${lat},${lng})(${budapestBbox});
+            way["leisure"="spa"](around:${radius},${lat},${lng})(${budapestBbox});
+            relation["leisure"="spa"](around:${radius},${lat},${lng})(${budapestBbox});
+            node["amenity"="spa"](around:${radius},${lat},${lng})(${budapestBbox});
+            way["amenity"="spa"](around:${radius},${lat},${lng})(${budapestBbox});
+            relation["amenity"="spa"](around:${radius},${lat},${lng})(${budapestBbox});
+            node["tourism"="attraction"]["name"~"thermal|bath|fürdő",i](around:${radius},${lat},${lng})(${budapestBbox});
+            way["tourism"="attraction"]["name"~"thermal|bath|fürdő",i](around:${radius},${lat},${lng})(${budapestBbox});
+            relation["tourism"="attraction"]["name"~"thermal|bath|fürdő",i](around:${radius},${lat},${lng})(${budapestBbox});
+          );
+          out center;
+        `;
+      } else if (amenity === 'museum') {
+        // Search for museums
+        overpassQuery = `
+          [out:json][timeout:25];
+          (
+            node["tourism"="museum"](around:${radius},${lat},${lng})(${budapestBbox});
+            way["tourism"="museum"](around:${radius},${lat},${lng})(${budapestBbox});
+            relation["tourism"="museum"](around:${radius},${lat},${lng})(${budapestBbox});
+            node["amenity"="arts_centre"](around:${radius},${lat},${lng})(${budapestBbox});
+            way["amenity"="arts_centre"](around:${radius},${lat},${lng})(${budapestBbox});
+            relation["amenity"="arts_centre"](around:${radius},${lat},${lng})(${budapestBbox});
+          );
+          out center;
+        `;
+      } else {
+        // Default search for other amenities
+        overpassQuery = `
+          [out:json][timeout:25];
+          (
+            node["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
+            way["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
+            relation["amenity"="${amenity}"](around:${radius},${lat},${lng})(${budapestBbox});
+          );
+          out center;
+        `;
+      }
 
       const response = await axios.post(this.overpassBaseUrl, overpassQuery, {
         headers: {

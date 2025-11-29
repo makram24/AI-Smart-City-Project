@@ -29,7 +29,9 @@ export interface MapMarker {
     | 'highlight'
     | 'historical'
     | 'landmark'
-    | 'viewpoint';
+    | 'viewpoint'
+    | 'thermal_bath'
+    | 'spa';
   icon?: string;
   rating?: number;
   hours?: string;
