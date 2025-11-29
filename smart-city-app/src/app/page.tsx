@@ -410,33 +410,246 @@ export default function Home() {
   };
 
   const handleMoodboardSuggestion = async (suggestion: MoodboardSuggestion) => {
-    if (!suggestion.action) return;
-
-    if (suggestion.action.type === 'search' && suggestion.action.data?.query) {
-      // Trigger a search query
-      handleSendMessage(suggestion.action.data.query);
-    } else if (suggestion.action.type === 'route' && suggestion.action.data?.mode) {
-      // For route suggestions, we'd need a destination - could prompt user or use a default
-      if (userLocation) {
-        // Example: suggest a route to a popular destination based on mode
-        const destinations: { [key: string]: string } = {
-          walking: 'Buda Castle',
-          cycling: 'City Park',
-          public_transport: 'Parliament'
-        };
-        const destination = destinations[suggestion.action.data.mode] || 'City Center';
-        handleRouteRequest(suggestion.action.data.mode as any, destination);
-      }
-    } else if (suggestion.action.type === 'info') {
-      // Show info in chat
+    if (!suggestion.action) {
+      // If no action, just show the suggestion description in chat
       const infoMessage: ChatMessage = {
         id: Date.now().toString(),
-        text: suggestion.description,
+        text: `${suggestion.title}: ${suggestion.description}`,
         sender: 'ai',
         timestamp: new Date().toISOString(),
         persona: activePersona || DEFAULT_PERSONA
       };
       setMessages(prev => [...prev, infoMessage]);
+      return;
+    }
+
+    if (suggestion.action.type === 'search' && suggestion.action.data?.query) {
+      // Trigger a search query - this will automatically update chat and map
+      handleSendMessage(suggestion.action.data.query);
+    } else if (suggestion.action.type === 'route' && suggestion.action.data?.mode) {
+      // For route suggestions, determine destination based on mode and context
+      if (userLocation) {
+        const mode = suggestion.action.data.mode;
+        let destination = 'City Center';
+        
+        // Smart destination selection based on mode and suggestion context
+        if (suggestion.id.includes('weather_hot') || suggestion.id.includes('weather_perfect')) {
+          destination = mode === 'walking' ? 'City Park' : mode === 'cycling' ? 'Margaret Island' : 'Heroes Square';
+        } else if (suggestion.id.includes('time_morning')) {
+          destination = 'Great Market Hall';
+        } else if (suggestion.id.includes('time_afternoon')) {
+          destination = 'Buda Castle';
+        } else if (suggestion.id.includes('time_evening')) {
+          destination = 'Fisherman\'s Bastion';
+        } else if (suggestion.id.includes('weekend')) {
+          destination = mode === 'cycling' ? 'Margaret Island' : 'City Park';
+        } else {
+          // Default destinations
+          const destinations: { [key: string]: string } = {
+            walking: 'Buda Castle',
+            cycling: 'City Park',
+            public_transport: 'Parliament'
+          };
+          destination = destinations[mode] || 'City Center';
+        }
+        
+        handleRouteRequest(mode as any, destination);
+      } else {
+        const errorMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: 'I need your current location to plan a route. Please allow location access and try again.',
+          sender: 'ai',
+          timestamp: new Date().toISOString(),
+          persona: activePersona || DEFAULT_PERSONA
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+    } else if (suggestion.action.type === 'info') {
+      // Handle info type - check if it's disruptions
+      if (suggestion.action.data?.type === 'disruptions') {
+        await handleTransportDisruptions();
+      } else {
+        // Show info in chat
+        const infoMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: `${suggestion.title}\n\n${suggestion.description}`,
+          sender: 'ai',
+          timestamp: new Date().toISOString(),
+          persona: activePersona || DEFAULT_PERSONA
+        };
+        setMessages(prev => [...prev, infoMessage]);
+      }
+    }
+  };
+
+  const handleWeatherClick = async () => {
+    if (!apiConnected) {
+      const warningMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Weather information needs the backend connection. Please reconnect and try again.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, warningMessage]);
+      return;
+    }
+
+    try {
+      const weatherData = await apiService.getCurrentWeather();
+      if (!weatherData) {
+        throw new Error('Weather data not available');
+      }
+
+      const { weather, context } = weatherData;
+      
+      // Build weather message
+      let weatherText = `🌤️ **Current Weather in Budapest**\n\n`;
+      weatherText += `**Temperature:** ${weather.temperature}°C (feels like ${weather.feelsLike}°C)\n`;
+      weatherText += `**Conditions:** ${weather.description}\n`;
+      weatherText += `**Humidity:** ${weather.humidity}%\n\n`;
+
+      if (context) {
+        weatherText += `**Activity Recommendations:**\n`;
+        weatherText += `• Walking: ${context.isGoodForWalking ? '✅ Great conditions' : '⚠️ Not ideal'}\n`;
+        weatherText += `• Cycling: ${context.isGoodForCycling ? '✅ Great conditions' : '⚠️ Not ideal'}\n\n`;
+        
+        if (context.recommendations && context.recommendations.length > 0) {
+          weatherText += `**Suggestions:**\n`;
+          context.recommendations.forEach(rec => {
+            weatherText += `• ${rec}\n`;
+          });
+        }
+      }
+
+      const weatherMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: weatherText,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+
+      setMessages(prev => [...prev, weatherMessage]);
+
+      // If weather is good for outdoor activities, show nearby parks/outdoor places
+      if (context?.isGoodForWalking || context?.isGoodForCycling) {
+        if (userLocation) {
+          try {
+            const places = await apiService.searchPlaces('park, outdoor, viewpoint', userLocation.lat, userLocation.lng, 2000);
+            if (places.length > 0) {
+              const markers: MapMarker[] = places.slice(0, 5).map(place => ({
+                position: place.position,
+                title: place.name,
+                description: place.description,
+                type: 'viewpoint' as any
+              }));
+              setMapMarkers(prev => [...prev, ...markers]);
+            }
+          } catch (error) {
+            console.error('Failed to fetch outdoor places:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Weather click error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Sorry, I could not fetch weather information right now. Please try again in a bit.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
+  const handleTransportDisruptions = async () => {
+    if (!apiConnected) {
+      const warningMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Transport information needs the backend connection. Please reconnect and try again.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, warningMessage]);
+      return;
+    }
+
+    try {
+      const disruptions = await apiService.getTransportDisruptions();
+      
+      let disruptionText = `⚠️ **Transport Disruptions in Budapest**\n\n`;
+      
+      if (disruptions.length === 0) {
+        disruptionText += '✅ No disruptions reported at the moment. All transport services are running normally.';
+      } else {
+        disruptionText += `There ${disruptions.length === 1 ? 'is' : 'are'} **${disruptions.length}** disruption${disruptions.length > 1 ? 's' : ''}:\n\n`;
+        
+        disruptions.slice(0, 5).forEach((disruption: any, index: number) => {
+          disruptionText += `${index + 1}. `;
+          if (disruption.line) {
+            disruptionText += `**Line ${disruption.line}**: `;
+          }
+          if (disruption.type) {
+            disruptionText += `${disruption.type} - `;
+          }
+          if (disruption.description) {
+            disruptionText += disruption.description;
+          } else if (disruption.message) {
+            disruptionText += disruption.message;
+          } else {
+            disruptionText += 'Service disruption';
+          }
+          if (disruption.from && disruption.to) {
+            disruptionText += ` (${disruption.from} → ${disruption.to})`;
+          }
+          disruptionText += '\n';
+        });
+
+        if (disruptions.length > 5) {
+          disruptionText += `\n... and ${disruptions.length - 5} more disruption${disruptions.length - 5 > 1 ? 's' : ''}`;
+        }
+      }
+
+      const disruptionMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: disruptionText,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+
+      setMessages(prev => [...prev, disruptionMessage]);
+
+      // Show nearby transport stops on map if location available
+      if (userLocation) {
+        try {
+          const stops = await apiService.getTransportStops(userLocation.lat, userLocation.lng, 1000);
+          if (stops.length > 0) {
+            const markers: MapMarker[] = stops.slice(0, 10).map(stop => ({
+              position: stop.position,
+              title: stop.name,
+              description: `Routes: ${stop.routes.join(', ')}`,
+              type: stop.type
+            }));
+            setMapMarkers(prev => [...prev, ...markers]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch transport stops:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Transport disruptions error:', error);
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: 'Sorry, I could not fetch transport disruption information right now. Please try again in a bit.',
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+        persona: activePersona || DEFAULT_PERSONA
+      };
+      setMessages(prev => [...prev, errorMessage]);
     }
   };
 
@@ -556,6 +769,8 @@ export default function Home() {
           <Moodboard 
             userLocation={userLocation}
             onSuggestionAction={handleMoodboardSuggestion}
+            onWeatherClick={handleWeatherClick}
+            onTransportClick={handleTransportDisruptions}
           />
         )}
         {activeStory && (

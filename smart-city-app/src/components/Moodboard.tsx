@@ -8,6 +8,8 @@ import { MoodboardContext, MoodboardSuggestion, apiService } from "@/lib/api";
 interface MoodboardProps {
   userLocation?: { lat: number; lng: number } | null;
   onSuggestionAction?: (suggestion: MoodboardSuggestion) => void;
+  onWeatherClick?: () => void;
+  onTransportClick?: () => void;
 }
 
 const priorityColors = {
@@ -24,7 +26,7 @@ const typeIcons: { [key: string]: any } = {
   event: "🎉"
 };
 
-export default function Moodboard({ userLocation, onSuggestionAction }: MoodboardProps) {
+export default function Moodboard({ userLocation, onSuggestionAction, onWeatherClick, onTransportClick }: MoodboardProps) {
   const [moodboard, setMoodboard] = useState<MoodboardContext | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
@@ -172,20 +174,28 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
 
         {/* Weather Summary */}
         {moodboard.weather && (
-          <div className="mt-3 flex items-center gap-3 bg-white/10 rounded-lg p-2 backdrop-blur">
+          <div 
+            onClick={onWeatherClick}
+            className="mt-3 flex items-center gap-3 bg-white/10 rounded-lg p-2 backdrop-blur cursor-pointer hover:bg-white/20 transition"
+          >
             <span className="text-3xl">{moodboard.weather.description.includes('rain') ? '🌧️' : moodboard.weather.description.includes('cloud') ? '☁️' : '☀️'}</span>
-            <div>
+            <div className="flex-1">
               <div className="font-semibold">{moodboard.weather.temperature}°C</div>
               <div className="text-xs opacity-90 capitalize">{moodboard.weather.description}</div>
             </div>
+            <Info className="w-4 h-4 opacity-70" />
           </div>
         )}
 
         {/* Transport Status */}
         {moodboard.transportStatus.hasDisruptions && (
-          <div className="mt-2 flex items-center gap-2 text-xs bg-red-500/20 rounded px-2 py-1">
+          <div 
+            onClick={onTransportClick}
+            className="mt-2 flex items-center gap-2 text-xs bg-red-500/20 rounded px-2 py-1 cursor-pointer hover:bg-red-500/30 transition"
+          >
             <AlertCircle className="w-3 h-3" />
-            <span>{moodboard.transportStatus.disruptionCount} transport disruption{moodboard.transportStatus.disruptionCount > 1 ? 's' : ''}</span>
+            <span className="flex-1">{moodboard.transportStatus.disruptionCount} transport disruption{moodboard.transportStatus.disruptionCount > 1 ? 's' : ''}</span>
+            <Info className="w-3 h-3 opacity-70" />
           </div>
         )}
       </div>
@@ -220,11 +230,12 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
                     </div>
                     <p className="text-xs opacity-90 leading-relaxed">{suggestion.description}</p>
                     {suggestion.action && (
-                      <button className="mt-2 text-xs font-medium underline hover:no-underline flex items-center gap-1">
+                      <div className="mt-2 text-xs font-medium text-blue-700 flex items-center gap-1">
                         {suggestion.action.type === 'route' && <Navigation className="w-3 h-3" />}
                         {suggestion.action.type === 'search' && <MapPin className="w-3 h-3" />}
-                        {suggestion.action.label}
-                      </button>
+                        {suggestion.action.type === 'info' && <Info className="w-3 h-3" />}
+                        <span>{suggestion.action.label}</span>
+                      </div>
                     )}
                   </div>
                 </div>
