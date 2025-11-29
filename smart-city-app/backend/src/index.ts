@@ -762,23 +762,48 @@ class AIService {
       return this.applyPersona(personaContext, result);
     }
 
+    // Specialized handling for Culture Curator - prioritize accurate historical/cultural answers
+    if (personaContext?.id === 'culture_curator') {
+      const cultureResult = await this.handleCultureCuratorQuery(message, userLocation);
+      if (cultureResult) {
+        return this.applyPersona(personaContext, cultureResult);
+      }
+    }
+
     // Use OpenAI if available for general queries
     if (openai) {
       try {
+        // Enhanced system prompt for Culture Curator
+        const systemPrompt = personaContext?.id === 'culture_curator'
+          ? `You are a Culture Curator AI assistant specializing in Budapest's rich history, heritage, and cultural landmarks. You provide accurate, detailed, and engaging information about:
+
+- Historical landmarks: Buda Castle (UNESCO World Heritage), Fisherman's Bastion, Matthias Church, Hungarian Parliament Building, Chain Bridge (first permanent bridge connecting Buda and Pest)
+- Museums: Hungarian National Museum, Hungarian National Gallery, Museum of Fine Arts, House of Terror, Ludwig Museum
+- Cultural sites: Great Market Hall (Nagy Vásárcsarnok), St. Stephen's Basilica, Heroes' Square (Hősök tere), Andrássy Avenue (UNESCO World Heritage)
+- Historical context: Budapest was formed in 1873 by merging Buda, Pest, and Óbuda. The city has Roman origins (Aquincum), Ottoman influences, and Austro-Hungarian Empire heritage.
+- Architectural styles: Gothic (Matthias Church), Neo-Gothic (Parliament), Art Nouveau (Gellért Bath), Baroque, and Modern
+- Important dates: Chain Bridge (1849), Parliament (1902), Heroes' Square (1896 Millennium Monument)
+
+Always provide accurate historical facts, architectural details, and cultural significance. If you're unsure about specific details, acknowledge it rather than guessing. Keep responses informative but engaging, around 100-200 words.`
+          : "You are a helpful AI assistant for Budapest city services. You help users find places, get directions, and discover local information. Keep responses concise and helpful. Always mention that you can help with finding places, getting directions, and discovering local events.";
+
+        const maxTokens = personaContext?.id === 'culture_curator' ? 300 : 150;
+        const temperature = personaContext?.id === 'culture_curator' ? 0.5 : 0.7; // Lower temperature for more accurate answers
+
         const completion = await openai.chat.completions.create({
           model: "gpt-3.5-turbo",
           messages: [
             {
               role: "system",
-              content: "You are a helpful AI assistant for Budapest city services. You help users find places, get directions, and discover local information. Keep responses concise and helpful. Always mention that you can help with finding places, getting directions, and discovering local events."
+              content: systemPrompt
             },
             {
               role: "user",
               content: message
             }
           ],
-          max_tokens: 150,
-          temperature: 0.7
+          max_tokens: maxTokens,
+          temperature: temperature
         });
 
         return this.applyPersona(personaContext, {
@@ -1057,6 +1082,86 @@ class AIService {
         markers: []
       };
     }
+  }
+
+  private async handleCultureCuratorQuery(message: string, userLocation?: { lat: number; lng: number }): Promise<{
+    text: string;
+    markers: any[];
+  } | null> {
+    const lowerMessage = message.toLowerCase();
+
+    // Check for historical places queries
+    const historicalKeywords = ['historical', 'history', 'heritage', 'landmark', 'monument', 'museum', 'castle', 'bastion', 'parliament', 'basilica', 'bridge'];
+    const isHistoricalQuery = historicalKeywords.some(keyword => lowerMessage.includes(keyword));
+
+    // If user asks about nearby historical places and has location
+    if (userLocation && (lowerMessage.includes('near me') || lowerMessage.includes('nearby') || lowerMessage.includes('around here'))) {
+      try {
+        const historicalPlaces = await geospatialService.getHistoricalPlaces(userLocation.lat, userLocation.lng, 2000);
+        
+        if (historicalPlaces.length > 0) {
+          const markers = historicalPlaces.slice(0, 5).map((place: any) => {
+            const lat = place.lat || place.center?.lat;
+            const lng = place.lon || place.center?.lon;
+            const name = place.tags?.name || 'Historical Place';
+            const description = geospatialService.getHistoricalPlaceDescription(name, place.tags || {});
+            
+            return {
+              position: [lat, lng],
+              title: name,
+              description: description,
+              type: place.tags?.historic || place.tags?.tourism || 'historical'
+            };
+          });
+
+          const nearest = historicalPlaces[0];
+          const nearestName = nearest.tags?.name || 'a historical site';
+          const distance = userLocation ? geospatialService.calculateDistance(
+            userLocation.lat,
+            userLocation.lng,
+            nearest.lat || nearest.center?.lat,
+            nearest.lon || nearest.center?.lon
+          ) : 0;
+
+          return {
+            text: `I found ${historicalPlaces.length} historical sites near you. The closest is ${nearestName}, ${distance.toFixed(1)} km away. ${geospatialService.getHistoricalPlaceDescription(nearestName, nearest.tags || {})} I've marked the most significant ones on the map.`,
+            markers
+          };
+        }
+      } catch (error) {
+        console.error('Historical places query error:', error);
+      }
+    }
+
+    // Handle specific landmark queries with accurate information
+    const landmarkInfo: { [key: string]: string } = {
+      'buda castle': 'Buda Castle (Budavári Palota) is a UNESCO World Heritage Site and historic castle complex. Originally built in the 13th century, it served as the residence of Hungarian kings. The current Baroque palace dates from the 18th century, though it was heavily damaged in WWII and reconstructed. Today it houses the Hungarian National Gallery and Budapest History Museum. The castle district offers stunning views of the Danube and Pest side.',
+      'fisherman\'s bastion': 'Fisherman\'s Bastion (Halászbástya) is a Neo-Romanesque terrace built between 1895-1902. Despite its name, it was never used for defense. It was designed by Frigyes Schulek as a viewing platform with seven towers representing the seven Magyar tribes that settled in Hungary. The bastion offers panoramic views of the Danube, Parliament, and Pest. It\'s located next to Matthias Church on Castle Hill.',
+      'matthias church': 'Matthias Church (Mátyás-templom) is a Gothic church on Castle Hill, originally built in the 13th century. It was the site of coronations for Hungarian kings, including Franz Joseph I and Charles IV. The church features colorful Zsolnay ceramic tiles on its roof and houses the Ecclesiastical Art Museum. The church was restored by Frigyes Schulek in the late 19th century.',
+      'parliament': 'The Hungarian Parliament Building (Országház) is a Neo-Gothic masterpiece completed in 1902. Designed by Imre Steindl, it\'s one of the largest parliament buildings in the world and a symbol of Budapest. The building features 691 rooms, 20 kilometers of corridors, and houses the Hungarian Crown Jewels. It stands on the Pest side of the Danube and is particularly beautiful when illuminated at night.',
+      'chain bridge': 'The Chain Bridge (Széchenyi Lánchíd) was the first permanent bridge connecting Buda and Pest, completed in 1849. Designed by English engineer William Tierney Clark and built by Scottish engineer Adam Clark, it was a marvel of engineering at the time. The bridge was destroyed in WWII but rebuilt identically. It\'s named after Count István Széchenyi, who initiated its construction.',
+      'st stephen\'s basilica': 'St. Stephen\'s Basilica (Szent István-bazilika) is the largest church in Budapest, completed in 1905. It\'s named after Hungary\'s first king, St. Stephen, whose mummified right hand (the Holy Right) is displayed in the reliquary. The church features Neo-Renaissance architecture and offers panoramic views from its dome. It can accommodate up to 8,500 people.',
+      'heroes\' square': 'Heroes\' Square (Hősök tere) was built in 1896 to commemorate the 1000th anniversary of the Magyar conquest of Hungary. The centerpiece is the Millennium Monument with the Archangel Gabriel on top. The colonnades feature statues of Hungarian leaders. The square is flanked by the Museum of Fine Arts and the Palace of Art (Műcsarnok).',
+      'great market hall': 'The Great Market Hall (Nagy Vásárcsarnok) is Budapest\'s largest and oldest indoor market, opened in 1897. Designed by Samu Pecz, it features beautiful ironwork and Zsolnay ceramic tiles. The ground floor sells fresh produce, meat, and Hungarian specialties like paprika and salami. The upper level has food stalls and souvenir shops. It\'s located at the Pest end of Liberty Bridge.',
+      'andrássy avenue': 'Andrássy Avenue (Andrássy út) is a UNESCO World Heritage boulevard connecting City Park to the city center. Built in the 1870s, it\'s lined with elegant Neo-Renaissance mansions, luxury shops, and the Hungarian State Opera House. The avenue was named after Prime Minister Gyula Andrássy and is one of Budapest\'s most prestigious streets.',
+      'gellért hill': 'Gellért Hill rises 235 meters above the Danube and offers panoramic views of Budapest. It\'s named after St. Gerard (Gellért), who was martyred here in the 11th century. The hill features the Liberty Statue (Szabadság-szobor), erected in 1947 to commemorate liberation from Nazi occupation. The Gellért Cave Church and the Citadella are also located here.'
+    };
+
+    for (const [landmark, info] of Object.entries(landmarkInfo)) {
+      if (lowerMessage.includes(landmark)) {
+        return {
+          text: info,
+          markers: []
+        };
+      }
+    }
+
+    // If it's a historical query but we don't have specific handling, return null to let OpenAI handle it
+    if (isHistoricalQuery) {
+      return null; // Let OpenAI with enhanced prompt handle it
+    }
+
+    return null;
   }
 
   private detectPersona(message: string): PersonaDefinition | null {
