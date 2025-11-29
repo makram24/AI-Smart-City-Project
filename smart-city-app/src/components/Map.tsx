@@ -13,8 +13,31 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-// Custom icons for different marker types with animations
-const createCustomIcon = (color: string, size: number = 20) => {
+// Icon mappings for different marker types
+const iconMap: { [key: string]: string } = {
+  pharmacy: '💊',
+  restaurant: '🍽️',
+  hospital: '🏥',
+  bank: '🏦',
+  metro: '🚇',
+  bus: '🚌',
+  tram: '🚋',
+  bike_station: '🚲',
+  playbook: '📖',
+  highlight: '⭐',
+  historical: '🏛️',
+  landmark: '📍',
+  viewpoint: '👁️',
+  thermal_bath: '♨️',
+  spa: '♨️',
+  default: '📍',
+  destination: '🎯',
+  user: '👤'
+};
+
+// Custom icons for different marker types with icons
+const createCustomIcon = (type: string, color: string, size: number = 28) => {
+  const icon = iconMap[type] || iconMap.default;
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
@@ -26,31 +49,36 @@ const createCustomIcon = (color: string, size: number = 20) => {
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       transition: all 0.3s ease;
       cursor: pointer;
-    "></div>`,
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: ${size * 0.6}px;
+      line-height: 1;
+    ">${icon}</div>`,
     iconSize: [size, size],
     iconAnchor: [size/2, size/2]
   });
 };
 
 const icons = {
-  pharmacy: createCustomIcon('#10b981'), // green
-  restaurant: createCustomIcon('#f59e0b'), // amber
-  hospital: createCustomIcon('#ef4444'), // red
-  bank: createCustomIcon('#3b82f6'), // blue
-  metro: createCustomIcon('#dc2626'), // red
-  bus: createCustomIcon('#2563eb'), // blue
-  tram: createCustomIcon('#059669'), // green
-  bike_station: createCustomIcon('#7c3aed'), // purple
-  playbook: createCustomIcon('#0ea5e9'), // sky
-  highlight: createCustomIcon('#ec4899'), // pink
-  historical: createCustomIcon('#9333ea'), // violet
-  landmark: createCustomIcon('#f97316'), // orange
-  viewpoint: createCustomIcon('#22d3ee'), // teal
-  thermal_bath: createCustomIcon('#f97316', 24), // warm orange, slightly larger
-  spa: createCustomIcon('#f97316', 24), // warm orange, slightly larger
-  default: createCustomIcon('#6b7280'), // gray
-  destination: createCustomIcon('#8b5cf6'), // purple
-  user: createCustomIcon('#06b6d4') // cyan
+  pharmacy: createCustomIcon('pharmacy', '#10b981'), // green
+  restaurant: createCustomIcon('restaurant', '#f59e0b'), // amber
+  hospital: createCustomIcon('hospital', '#ef4444'), // red
+  bank: createCustomIcon('bank', '#3b82f6'), // blue
+  metro: createCustomIcon('metro', '#dc2626'), // red
+  bus: createCustomIcon('bus', '#2563eb'), // blue
+  tram: createCustomIcon('tram', '#059669'), // green
+  bike_station: createCustomIcon('bike_station', '#7c3aed'), // purple
+  playbook: createCustomIcon('playbook', '#0ea5e9'), // sky
+  highlight: createCustomIcon('highlight', '#ec4899'), // pink
+  historical: createCustomIcon('historical', '#9333ea'), // violet
+  landmark: createCustomIcon('landmark', '#f97316'), // orange
+  viewpoint: createCustomIcon('viewpoint', '#22d3ee'), // teal
+  thermal_bath: createCustomIcon('thermal_bath', '#f97316', 32), // warm orange, larger
+  spa: createCustomIcon('spa', '#f97316', 32), // warm orange, larger
+  default: createCustomIcon('default', '#6b7280'), // gray
+  destination: createCustomIcon('destination', '#8b5cf6'), // purple
+  user: createCustomIcon('user', '#06b6d4') // cyan
 };
 
 interface MapProps {
