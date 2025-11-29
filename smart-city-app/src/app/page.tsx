@@ -537,6 +537,7 @@ export default function Home() {
             isLoading={isLoading}
             persona={activePersona}
             onPersonaPrompt={handlePersonaPrompt}
+            isPlaybookActive={!!selectedPlaybook}
           />
         </div>
         {selectedPlaybook && (

@@ -12,9 +12,10 @@ interface ChatProps {
   isLoading?: boolean;
   persona?: PersonaContext | null;
   onPersonaPrompt?: (prompt: string) => void;
+  isPlaybookActive?: boolean;
 }
 
-export default function Chat({ onSendMessage, messages, isLoading, persona, onPersonaPrompt }: ChatProps) {
+export default function Chat({ onSendMessage, messages, isLoading, persona, onPersonaPrompt, isPlaybookActive = false }: ChatProps) {
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -61,54 +62,56 @@ export default function Chat({ onSendMessage, messages, isLoading, persona, onPe
         </p>
       </div>
 
-      {/* Quick Actions */}
-      <div className="p-4 border-b border-border">
-        <p className="text-sm text-muted-foreground mb-2">Quick actions:</p>
-        <div className="flex flex-wrap gap-2">
-          {quickActions.map((action, index) => {
-            const Icon = action.icon;
-            return (
-              <Button
-                key={index}
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickAction(action.text)}
-                className="text-xs"
-              >
-                <Icon className="w-3 h-3 mr-1" />
-                {action.text}
-              </Button>
-            );
-          })}
-        </div>
-        {persona && (
-          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/80 p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-wide font-semibold text-blue-500">
-                  {persona.name}
-                </p>
-                <p className="text-xs text-blue-900">{persona.tagline}</p>
-              </div>
-              <Sparkles className="w-4 h-4 text-blue-400" />
-            </div>
-            {persona.recommendedPrompts.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {persona.recommendedPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => handlePersonaPromptClick(prompt)}
-                    className="text-[11px] px-3 py-1 rounded-full border border-blue-200 text-blue-700 bg-white hover:bg-blue-100 transition disabled:opacity-50"
-                    disabled={isLoading}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Quick Actions - Hidden when playbook is active */}
+      {!isPlaybookActive && (
+        <div className="p-4 border-b border-border">
+          <p className="text-sm text-muted-foreground mb-2">Quick actions:</p>
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((action, index) => {
+              const Icon = action.icon;
+              return (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickAction(action.text)}
+                  className="text-xs"
+                >
+                  <Icon className="w-3 h-3 mr-1" />
+                  {action.text}
+                </Button>
+              );
+            })}
           </div>
-        )}
-      </div>
+          {persona && (
+            <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/80 p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide font-semibold text-blue-500">
+                    {persona.name}
+                  </p>
+                  <p className="text-xs text-blue-900">{persona.tagline}</p>
+                </div>
+                <Sparkles className="w-4 h-4 text-blue-400" />
+              </div>
+              {persona.recommendedPrompts.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {persona.recommendedPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => handlePersonaPromptClick(prompt)}
+                      className="text-[11px] px-3 py-1 rounded-full border border-blue-200 text-blue-700 bg-white hover:bg-blue-100 transition disabled:opacity-50"
+                      disabled={isLoading}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
