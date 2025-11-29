@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { X, RefreshCw, AlertCircle, Info, MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoodboardContext, MoodboardSuggestion, apiService } from "@/lib/api";
@@ -29,6 +29,10 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const moodboardRef = useRef<HTMLDivElement>(null);
 
   const loadMoodboard = async () => {
     setIsLoading(true);
@@ -49,11 +53,49 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
     return () => clearInterval(interval);
   }, [userLocation]);
 
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging && moodboardRef.current) {
+        const newX = e.clientX - dragOffset.x;
+        const newY = e.clientY - dragOffset.y;
+        
+        // Keep within viewport bounds
+        const maxX = window.innerWidth - moodboardRef.current.offsetWidth;
+        const maxY = window.innerHeight - moodboardRef.current.offsetHeight;
+        
+        setPosition({
+          x: Math.max(0, Math.min(newX, maxX)),
+          y: Math.max(0, Math.min(newY, maxY))
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, dragOffset]);
+
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="absolute top-4 right-4 z-20 bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition"
+        style={{
+          position: 'absolute',
+          top: position.y || 16,
+          right: position.x ? 'auto' : 16,
+          left: position.x || 'auto',
+          zIndex: 20
+        }}
+        className="bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition"
         title="Show City Moodboard"
       >
         <span className="text-2xl">🎨</span>
@@ -71,10 +113,35 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (moodboardRef.current) {
+      const rect = moodboardRef.current.getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+      setIsDragging(true);
+    }
+  };
+
   return (
-    <div className="absolute top-4 right-4 z-20 w-80 max-h-[600px] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
+    <div
+      ref={moodboardRef}
+      style={{
+        position: 'absolute',
+        top: position.y || 16,
+        right: position.x ? 'auto' : 16,
+        left: position.x || 'auto',
+        zIndex: 20,
+        cursor: isDragging ? 'grabbing' : 'default'
+      }}
+      className="w-80 max-h-[600px] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
+    >
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 text-white">
+      <div
+        onMouseDown={handleMouseDown}
+        className={`bg-gradient-to-r from-blue-500 to-purple-600 p-4 text-white ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} select-none`}
+      >
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-lg">City Moodboard</h3>
@@ -88,6 +155,7 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
               disabled={isLoading}
               className="p-1 hover:bg-white/20 rounded transition"
               title="Refresh"
+              onMouseDown={(e) => e.stopPropagation()}
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -95,6 +163,7 @@ export default function Moodboard({ userLocation, onSuggestionAction }: Moodboar
               onClick={() => setIsOpen(false)}
               className="p-1 hover:bg-white/20 rounded transition"
               title="Close"
+              onMouseDown={(e) => e.stopPropagation()}
             >
               <X className="w-4 h-4" />
             </button>
