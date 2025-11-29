@@ -111,9 +111,10 @@ export class MoodboardService {
 
     // Weather-based suggestions
     if (weather) {
-      const isRaining = weather.description.includes('rain') || 
-                       weather.description.includes('drizzle') ||
-                       weather.description.includes('storm');
+      const isRaining = weather.description.toLowerCase().includes('rain') || 
+                       weather.description.toLowerCase().includes('drizzle') ||
+                       weather.description.toLowerCase().includes('storm') ||
+                       weather.description.toLowerCase().includes('shower');
       const isCold = weather.temperature < 10;
       const isHot = weather.temperature > 28;
       const isWindy = weather.windSpeed > 15;
@@ -274,19 +275,18 @@ export class MoodboardService {
       });
     }
 
-    // Weekend suggestions
-    if (dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday') {
+    if (timeOfDay === 'night') {
       suggestions.push({
-        id: 'weekend',
+        id: 'time_night',
         type: 'activity',
         priority: 'low',
-        title: 'Weekend Explorer',
-        description: 'Weekend vibes! Explore markets, parks, or take a leisurely bike ride.',
-        icon: '🎉',
+        title: 'Night Life',
+        description: 'Explore Budapest\'s vibrant nightlife - bars, clubs, or late-night walks along the Danube.',
+        icon: '🌙',
         action: {
-          label: 'Find weekend activities',
+          label: 'Find night spots',
           type: 'search',
-          data: { query: 'market, park, bike rental' }
+          data: { query: 'bar, club, nightlife' }
         },
         timestamp: now
       });

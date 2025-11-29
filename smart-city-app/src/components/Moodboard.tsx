@@ -188,13 +188,21 @@ export default function Moodboard({ userLocation, onSuggestionAction, onWeatherC
         )}
 
         {/* Transport Status */}
-        {moodboard.transportStatus.hasDisruptions && (
+        {moodboard.transportStatus.hasDisruptions ? (
           <div 
             onClick={onTransportClick}
             className="mt-2 flex items-center gap-2 text-xs bg-red-500/20 rounded px-2 py-1 cursor-pointer hover:bg-red-500/30 transition"
           >
             <AlertCircle className="w-3 h-3" />
             <span className="flex-1">{moodboard.transportStatus.disruptionCount} transport disruption{moodboard.transportStatus.disruptionCount > 1 ? 's' : ''}</span>
+            <Info className="w-3 h-3 opacity-70" />
+          </div>
+        ) : (
+          <div 
+            onClick={onTransportClick}
+            className="mt-2 flex items-center gap-2 text-xs bg-green-500/20 rounded px-2 py-1 cursor-pointer hover:bg-green-500/30 transition"
+          >
+            <span className="flex-1">✅ No transport disruptions</span>
             <Info className="w-3 h-3 opacity-70" />
           </div>
         )}

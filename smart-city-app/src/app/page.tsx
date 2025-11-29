@@ -427,7 +427,7 @@ export default function Home() {
       const query = suggestion.action.data.query.toLowerCase();
       
       // Special handling for museums and thermal baths - show on map immediately
-      if (query.includes('museum') || query.includes('gallery')) {
+      if (query.includes('museum') || query.includes('gallery') || query.includes('historical')) {
         await handleMuseumSearch();
         return;
       } else if (query.includes('thermal') || query.includes('bath') || query.includes('spa')) {
@@ -452,8 +452,6 @@ export default function Home() {
           destination = 'Buda Castle';
         } else if (suggestion.id.includes('time_evening')) {
           destination = 'Fisherman\'s Bastion';
-        } else if (suggestion.id.includes('weekend')) {
-          destination = mode === 'cycling' ? 'Margaret Island' : 'City Park';
         } else {
           // Default destinations
           const destinations: { [key: string]: string } = {
@@ -680,7 +678,7 @@ export default function Home() {
     setIsLoading(true);
     try {
       // Search for museums
-      const places = await apiService.searchPlaces('museum, gallery', userLocation.lat, userLocation.lng, 5000);
+      const places = await apiService.searchPlaces('museum', userLocation.lat, userLocation.lng, 5000);
       
       if (places.length === 0) {
         const noResultsMessage: ChatMessage = {
