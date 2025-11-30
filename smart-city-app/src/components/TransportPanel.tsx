@@ -18,9 +18,10 @@ import {
   ChevronUp,
   Navigation
 } from "lucide-react";
-import { apiService, TransportStop, BikeStation, WeatherData, WeatherContext } from "@/lib/api";
+import { apiService, TransportStop, BikeStation, WeatherData, WeatherContext, RouteConfidence } from "@/lib/api";
 import NearbyPlaces from "./NearbyPlaces";
 import HistoricalPlaces from "./HistoricalPlaces";
+import TransportFeedback from "./TransportFeedback";
 
 interface TransportPanelProps {
   userLocation: { lat: number; lng: number } | null;
@@ -41,6 +42,8 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
   const [error, setError] = useState<string | null>(null);
   const [isTransportExpanded, setIsTransportExpanded] = useState(true);
   const [isRoutePlanningExpanded, setIsRoutePlanningExpanded] = useState(true);
+  const [selectedFeedbackRoute, setSelectedFeedbackRoute] = useState<{ routeId: string; routeType: 'bus' | 'tram' | 'metro' | 'trolley'; routeName: string } | null>(null);
+  const [routeConfidences, setRouteConfidences] = useState<Map<string, RouteConfidence>>(new Map());
 
   useEffect(() => {
     if (userLocation) {
@@ -303,6 +306,38 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                           <div className="text-xs text-gray-500">
                             {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
                           </div>
+                          {/* Route Confidence Indicators */}
+                          <div className="flex items-center gap-2 mt-1">
+                            {stop.routes.slice(0, 2).map((routeId) => {
+                              const confidence = routeConfidences.get(`${stop.type}_${routeId}`);
+                              if (!confidence) return null;
+                              return (
+                                <button
+                                  key={routeId}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFeedbackRoute({
+                                      routeId,
+                                      routeType: stop.type,
+                                      routeName: `${stop.type.toUpperCase()} ${routeId}`
+                                    });
+                                  }}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                    confidence.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                                    confidence.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}
+                                  title={`${confidence.sentiment} • ${confidence.averageReliability}/5 reliability • ${confidence.feedbackCount} reviews`}
+                                >
+                                  <span>{routeId}</span>
+                                  <span className="text-[9px]">
+                                    {confidence.sentiment === 'positive' ? '👍' :
+                                     confidence.sentiment === 'negative' ? '👎' : '➖'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     );
@@ -341,6 +376,38 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                           <div className="text-xs text-gray-500">
                             {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'line' : 'lines'}
                           </div>
+                          {/* Route Confidence Indicators */}
+                          <div className="flex items-center gap-2 mt-1">
+                            {stop.routes.slice(0, 2).map((routeId) => {
+                              const confidence = routeConfidences.get(`${stop.type}_${routeId}`);
+                              if (!confidence) return null;
+                              return (
+                                <button
+                                  key={routeId}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFeedbackRoute({
+                                      routeId,
+                                      routeType: stop.type,
+                                      routeName: `${stop.type.toUpperCase()} ${routeId}`
+                                    });
+                                  }}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                    confidence.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                                    confidence.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}
+                                  title={`${confidence.sentiment} • ${confidence.averageReliability}/5 reliability • ${confidence.feedbackCount} reviews`}
+                                >
+                                  <span>{routeId}</span>
+                                  <span className="text-[9px]">
+                                    {confidence.sentiment === 'positive' ? '👍' :
+                                     confidence.sentiment === 'negative' ? '👎' : '➖'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     );
@@ -378,6 +445,38 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                           </div>
                           <div className="text-xs text-gray-500">
                             {stop.routes.join(', ')} • {stop.routes.length} {stop.routes.length === 1 ? 'route' : 'routes'}
+                          </div>
+                          {/* Route Confidence Indicators */}
+                          <div className="flex items-center gap-2 mt-1">
+                            {stop.routes.slice(0, 2).map((routeId) => {
+                              const confidence = routeConfidences.get(`${stop.type}_${routeId}`);
+                              if (!confidence) return null;
+                              return (
+                                <button
+                                  key={routeId}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFeedbackRoute({
+                                      routeId,
+                                      routeType: stop.type,
+                                      routeName: `${stop.type.toUpperCase()} ${routeId}`
+                                    });
+                                  }}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                    confidence.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                                    confidence.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}
+                                  title={`${confidence.sentiment} • ${confidence.averageReliability}/5 reliability • ${confidence.feedbackCount} reviews`}
+                                >
+                                  <span>{routeId}</span>
+                                  <span className="text-[9px]">
+                                    {confidence.sentiment === 'positive' ? '👍' :
+                                     confidence.sentiment === 'negative' ? '👎' : '➖'}
+                                  </span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -455,6 +554,19 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
           onRouteRequest={onRouteRequest}
         />
       </div>
+
+      {/* Transport Feedback Modal */}
+      {selectedFeedbackRoute && (
+        <TransportFeedback
+          routeId={selectedFeedbackRoute.routeId}
+          routeType={selectedFeedbackRoute.routeType}
+          routeName={selectedFeedbackRoute.routeName}
+          onClose={() => setSelectedFeedbackRoute(null)}
+          onFeedbackSubmitted={() => {
+            loadRouteConfidences();
+          }}
+        />
+      )}
     </div>
   );
 }

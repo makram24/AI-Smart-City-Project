@@ -512,6 +512,75 @@ class ApiService {
     }
   }
 
+  // Phase 5: Community & Safety Network API
+  async submitTransportFeedback(feedback: {
+    routeId: string;
+    routeType: 'bus' | 'tram' | 'metro' | 'trolley';
+    sentiment: 'positive' | 'neutral' | 'negative';
+    reliability: number;
+    comment?: string;
+    userId?: string;
+  }): Promise<TransportFeedback> {
+    try {
+      const response = await this.api.post('/api/community/feedback', feedback);
+      return response.data.feedback;
+    } catch (error) {
+      console.error('Submit feedback API error:', error);
+      throw error;
+    }
+  }
+
+  async getRouteConfidence(
+    routeId: string,
+    routeType: 'bus' | 'tram' | 'metro' | 'trolley'
+  ): Promise<RouteConfidence | null> {
+    try {
+      const response = await this.api.get(`/api/community/confidence/${routeType}/${routeId}`);
+      return response.data.confidence || null;
+    } catch (error) {
+      console.error('Route confidence API error:', error);
+      return null;
+    }
+  }
+
+  async getMultipleRouteConfidences(
+    routes: Array<{ routeId: string; routeType: 'bus' | 'tram' | 'metro' | 'trolley' }>
+  ): Promise<RouteConfidence[]> {
+    try {
+      const response = await this.api.post('/api/community/confidence/batch', { routes });
+      return response.data.confidences || [];
+    } catch (error) {
+      console.error('Batch confidence API error:', error);
+      return [];
+    }
+  }
+
+  async analyzeRouteSafety(polyline: number[][]): Promise<RouteSafetyAnalysis | null> {
+    try {
+      const response = await this.api.post('/api/safety/analyze-route', { polyline });
+      return response.data.analysis || null;
+    } catch (error) {
+      console.error('Route safety analysis API error:', error);
+      return null;
+    }
+  }
+
+  async getConstructionZones(
+    lat: number,
+    lng: number,
+    radius: number = 500
+  ): Promise<any[]> {
+    try {
+      const response = await this.api.get('/api/safety/construction-zones', {
+        params: { lat, lng, radius }
+      });
+      return response.data.zones || [];
+    } catch (error) {
+      console.error('Construction zones API error:', error);
+      return [];
+    }
+  }
+
   // Health check
   async healthCheck(): Promise<boolean> {
     try {

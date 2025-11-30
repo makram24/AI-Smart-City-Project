@@ -8,6 +8,7 @@ import MapFilters from "@/components/MapFilters";
 import { NeighborhoodPlaybooks } from "@/components/NeighborhoodPlaybooks";
 import Moodboard from "@/components/Moodboard";
 import StoryCardComponent from "@/components/StoryCard";
+import RouteSafetyIndicator from "@/components/RouteSafetyIndicator";
 import { apiService, ChatMessage, MapMarker, PlaybookSummary, PlaybookDetail, PersonaContext, MoodboardSuggestion, StoryCard, StoryTrigger } from "@/lib/api";
 import { isWithinBudapest, normalizeCoordinate } from "@/lib/geoValidation";
 
@@ -60,6 +61,8 @@ export default function Home() {
   const [activePersona, setActivePersona] = useState<PersonaContext | null>(null);
   const [activeStory, setActiveStory] = useState<StoryCard | null>(null);
   const [storyTriggers, setStoryTriggers] = useState<StoryTrigger[]>([]);
+  const [routeSafetyAnalysis, setRouteSafetyAnalysis] = useState<any>(null);
+  const [constructionZones, setConstructionZones] = useState<any[]>([]);
   
   // Visibility states for all components
   const [isChatVisible, setIsChatVisible] = useState(true);
@@ -951,6 +954,31 @@ export default function Home() {
             }
           }}
         />
+        {/* Route Safety Indicator */}
+        {currentRoute && currentRoute.polyline && currentRoute.polyline.length >= 2 && (
+          <RouteSafetyIndicator 
+            routePolyline={currentRoute.polyline}
+            onSafetyData={(analysis) => {
+              setRouteSafetyAnalysis(analysis);
+              // Add construction zone markers
+              if (userLocation) {
+                apiService.getConstructionZones(userLocation.lat, userLocation.lng, 1000).then(zones => {
+                  const zoneMarkers = zones.map(zone => ({
+                    position: zone.position,
+                    title: 'Construction Zone',
+                    description: zone.description,
+                    type: 'default' as any
+                  }));
+                  setConstructionZones(zoneMarkers);
+                  setMapMarkers(prev => {
+                    const filtered = prev.filter(m => m.title !== 'Construction Zone');
+                    return [...filtered, ...zoneMarkers];
+                  });
+                });
+              }
+            }}
+          />
+        )}
         {isMapFiltersVisible ? (
           <MapFilters 
             onFiltersChange={setMapFilters}
