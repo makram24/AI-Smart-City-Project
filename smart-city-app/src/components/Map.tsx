@@ -32,7 +32,11 @@ const iconMap: { [key: string]: string } = {
   spa: '♨️',
   default: '📍',
   destination: '🎯',
-  user: '👤'
+  user: '👤',
+  vehicle_bus: '🚌',
+  vehicle_tram: '🚋',
+  vehicle_metro: '🚇',
+  vehicle_trolley: '🚎'
 };
 
 // Custom icons for different marker types with icons
@@ -78,7 +82,11 @@ const icons = {
   spa: createCustomIcon('spa', '#f97316', 32), // warm orange, larger
   default: createCustomIcon('default', '#6b7280'), // gray
   destination: createCustomIcon('destination', '#8b5cf6'), // purple
-  user: createCustomIcon('user', '#06b6d4') // cyan
+  user: createCustomIcon('user', '#06b6d4'), // cyan
+  vehicle_bus: createCustomIcon('vehicle_bus', '#2563eb', 32), // blue
+  vehicle_tram: createCustomIcon('vehicle_tram', '#059669', 32), // green
+  vehicle_metro: createCustomIcon('vehicle_metro', '#dc2626', 32), // red
+  vehicle_trolley: createCustomIcon('vehicle_trolley', '#7c3aed', 32) // purple
 };
 
 interface MapProps {
@@ -100,6 +108,19 @@ interface MapProps {
     distance: string;
     duration: string;
   };
+  vehicles?: Array<{
+    vehicleId: string;
+    routeId: string;
+    routeShortName?: string;
+    position: [number, number];
+    bearing?: number;
+    wheelchairAccessible?: boolean;
+  }>;
+  routeShapes?: Array<{
+    routeId: string;
+    shape: Array<[number, number]>;
+    color?: string;
+  }>;
   safetyAnalysis?: {
     segments: Array<{
       id: string;
@@ -160,7 +181,7 @@ function MapController({ center, zoom, routeCoordinates }: {
   return null;
 }
 
-export default function Map({ center, zoom = 13, markers = [], route, safetyAnalysis, constructionZones = [], filters, onMarkerClick }: MapProps) {
+export default function Map({ center, zoom = 13, markers = [], route, vehicles = [], routeShapes = [], safetyAnalysis, constructionZones = [], filters, onMarkerClick }: MapProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([47.4979, 19.0402]); // Budapest coordinates [lat, lng]
   const [isClient, setIsClient] = useState(false);
@@ -414,6 +435,26 @@ export default function Map({ center, zoom = 13, markers = [], route, safetyAnal
           </Circle>
         ))}
 
+        {/* Route Shapes */}
+        {routeShapes.map((routeShape) => (
+          <Polyline
+            key={routeShape.routeId}
+            positions={routeShape.shape}
+            color={routeShape.color || '#3b82f6'}
+            weight={4}
+            opacity={0.6}
+            smoothFactor={1}
+            dashArray="5, 10"
+          >
+            <Popup>
+              <div className="text-sm">
+                <strong>Route {routeShape.routeId}</strong>
+                <p className="text-xs text-gray-600 mt-1">Route path</p>
+              </div>
+            </Popup>
+          </Polyline>
+        ))}
+
         {/* Route polyline with safety visualization */}
         {routeCoordinates.length > 0 && (
           <>
@@ -500,6 +541,27 @@ export default function Map({ center, zoom = 13, markers = [], route, safetyAnal
                 smoothFactor={1}
               />
             )}
+
+            {/* Route Shapes */}
+            {routeShapes.map((routeShape) => (
+              <Polyline
+                key={routeShape.routeId}
+                positions={routeShape.shape}
+                color={routeShape.color || '#3b82f6'}
+                weight={4}
+                opacity={0.6}
+                smoothFactor={1}
+                dashArray="5, 10"
+              >
+                <Popup>
+                  <div className="text-sm">
+                    <strong>Route {routeShape.routeId}</strong>
+                    <p className="text-xs text-gray-600 mt-1">Route path</p>
+                  </div>
+                </Popup>
+              </Polyline>
+            ))}
+
             {/* Start marker - ONLY if coordinate is valid and in Budapest */}
             {routeCoordinates.length > 0 && (() => {
               const startCoord = routeCoordinates[0];
@@ -588,7 +650,62 @@ export default function Map({ center, zoom = 13, markers = [], route, safetyAnal
           }
           return null;
         })()}
-        
+
+        {/* Vehicle Markers - Always visible when vehicles are loaded */}
+        {vehicles.map((vehicle) => {
+          const vehicleType = vehicle.routeId.startsWith('M') ? 'vehicle_metro' :
+                            ['4', '6', '14', '47', '49'].includes(vehicle.routeId) ? 'vehicle_tram' :
+                            'vehicle_bus';
+          const vehicleIcon = icons[vehicleType] || icons.vehicle_bus;
+          
+          // Create rotated icon if bearing is available
+          const rotatedIcon = vehicle.bearing !== undefined ? 
+            L.divIcon({
+              className: 'custom-marker vehicle-marker',
+              html: `<div style="
+                background-color: ${vehicleType === 'vehicle_metro' ? '#dc2626' : 
+                                  vehicleType === 'vehicle_tram' ? '#059669' : '#2563eb'}; 
+                width: 32px; 
+                height: 32px; 
+                border-radius: 50%; 
+                border: 2px solid white; 
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                transform: rotate(${vehicle.bearing}deg);
+              ">${iconMap[vehicleType] || '🚌'}</div>`,
+              iconSize: [32, 32],
+              iconAnchor: [16, 16]
+            }) : vehicleIcon;
+
+          return (
+            <Marker
+              key={vehicle.vehicleId}
+              position={vehicle.position}
+              icon={rotatedIcon}
+            >
+              <Popup>
+                <div className="text-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">{iconMap[vehicleType] || '🚌'}</span>
+                    <div>
+                      <strong>Route {vehicle.routeShortName || vehicle.routeId}</strong>
+                      {vehicle.wheelchairAccessible && (
+                        <span className="ml-2 text-xs">♿</span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600">Vehicle ID: {vehicle.vehicleId}</p>
+                  {vehicle.bearing !== undefined && (
+                    <p className="text-xs text-gray-600">Direction: {Math.round(vehicle.bearing)}°</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
         
         {/* Clustered markers */}
         <MarkerClusterGroup

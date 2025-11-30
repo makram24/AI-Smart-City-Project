@@ -63,6 +63,10 @@ export default function Home() {
   const [storyTriggers, setStoryTriggers] = useState<StoryTrigger[]>([]);
   const [routeSafetyAnalysis, setRouteSafetyAnalysis] = useState<any>(null);
   const [constructionZones, setConstructionZones] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [routeShapes, setRouteShapes] = useState<any[]>([]);
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   
   // Visibility states for all components
   const [isChatVisible, setIsChatVisible] = useState(true);
@@ -107,6 +111,28 @@ export default function Home() {
     };
     checkApi();
   }, []);
+
+  // Auto-update vehicle positions every 30 seconds when a stop is selected
+  useEffect(() => {
+    if (!selectedStopId || !apiConnected) return;
+
+    const updateVehicles = async () => {
+      try {
+        const vehiclesData = await apiService.getVehiclesForStop(selectedStopId);
+        setVehicles(vehiclesData);
+      } catch (error) {
+        console.error('Failed to update vehicles:', error);
+      }
+    };
+
+    // Update immediately
+    updateVehicles();
+
+    // Set up interval for auto-updates
+    const interval = setInterval(updateVehicles, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedStopId, apiConnected]);
 
   useEffect(() => {
     if (!apiConnected) {
@@ -953,6 +979,8 @@ export default function Home() {
           zoom={13}
           markers={mapMarkers}
           route={currentRoute || undefined}
+          vehicles={vehicles}
+          routeShapes={routeShapes}
           safetyAnalysis={routeSafetyAnalysis || undefined}
           constructionZones={constructionZones}
           filters={mapFilters}
@@ -1090,6 +1118,37 @@ export default function Home() {
               const filtered = prev.filter(m => m.type !== 'bike_station');
               return [...filtered, ...bikeMarkers];
             });
+          }}
+          onStopSelect={async (stopId) => {
+            setSelectedStopId(stopId);
+            // Fetch vehicles for this stop
+            try {
+              const vehiclesData = await apiService.getVehiclesForStop(stopId);
+              setVehicles(vehiclesData);
+              console.log(`✅ Loaded ${vehiclesData.length} vehicles for stop ${stopId}`);
+            } catch (error) {
+              console.error('Failed to load vehicles:', error);
+            }
+          }}
+          onRouteSelect={async (routeId) => {
+            setSelectedRouteId(routeId);
+            // Fetch route details and shape
+            try {
+              const routeDetails = await apiService.getRouteDetails(routeId);
+              if (routeDetails && routeDetails.shape) {
+                setRouteShapes(prev => {
+                  const filtered = prev.filter(r => r.routeId !== routeId);
+                  return [...filtered, {
+                    routeId: routeDetails.routeId,
+                    shape: routeDetails.shape,
+                    color: routeDetails.color || '#3b82f6'
+                  }];
+                });
+                console.log(`✅ Loaded route shape for ${routeId}`);
+              }
+            } catch (error) {
+              console.error('Failed to load route details:', error);
+            }
           }}
         />
         </div>

@@ -28,10 +28,12 @@ interface TransportPanelProps {
   onRouteRequest: (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => void;
   onTransportStopsChange?: (stops: TransportStop[]) => void;
   onBikeStationsChange?: (stations: BikeStation[]) => void;
+  onStopSelect?: (stopId: string) => void;
+  onRouteSelect?: (routeId: string) => void;
   onClose?: () => void;
 }
 
-export default function TransportPanel({ userLocation, onRouteRequest, onTransportStopsChange, onBikeStationsChange, onClose }: TransportPanelProps) {
+export default function TransportPanel({ userLocation, onRouteRequest, onTransportStopsChange, onBikeStationsChange, onStopSelect, onRouteSelect, onClose }: TransportPanelProps) {
   const [transportStops, setTransportStops] = useState<TransportStop[]>([]);
   const [bikeStations, setBikeStations] = useState<BikeStation[]>([]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -286,6 +288,10 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                         console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
                         onRouteRequest('walking', destination);
                       }
+                      // Load vehicles for this stop
+                      if (onStopSelect) {
+                        onStopSelect(stop.id);
+                      }
                     };
                     
                     return (
@@ -356,6 +362,10 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                         console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
                         onRouteRequest('walking', destination);
                       }
+                      // Load vehicles for this stop
+                      if (onStopSelect) {
+                        onStopSelect(stop.id);
+                      }
                     };
                     
                     return (
@@ -425,6 +435,10 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                         const destination = `${stop.position[0]},${stop.position[1]}`;
                         console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
                         onRouteRequest('walking', destination);
+                      }
+                      // Load vehicles for this stop
+                      if (onStopSelect) {
+                        onStopSelect(stop.id);
                       }
                     };
                     
