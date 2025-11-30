@@ -189,8 +189,8 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
             {/* Mode Selection */}
             <div>
               <label className="text-xs font-medium text-gray-700 mb-2 block">Transport Mode</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['walking', 'cycling', 'public_transport'] as const).map((mode) => (
+              <div className="grid grid-cols-2 gap-2">
+                {(['walking', 'cycling'] as const).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setSelectedMode(mode)}
