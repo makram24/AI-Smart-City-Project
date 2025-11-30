@@ -242,6 +242,55 @@ export interface RouteSafetyAnalysis {
   recommendations: string[];
 }
 
+export interface VehiclePosition {
+  vehicleId: string;
+  routeId: string;
+  routeShortName?: string;
+  tripId?: string;
+  position: [number, number];
+  bearing?: number;
+  speed?: number;
+  licensePlate?: string;
+  wheelchairAccessible?: boolean;
+  lastUpdate?: string;
+}
+
+export interface RouteDetail {
+  routeId: string;
+  routeShortName: string;
+  routeLongName: string;
+  routeType: 'bus' | 'tram' | 'metro' | 'trolley';
+  color?: string;
+  textColor?: string;
+  description?: string;
+  agencyId?: string;
+  stops?: Array<{
+    stopId: string;
+    stopName: string;
+    position: [number, number];
+    sequence: number;
+  }>;
+  shape?: Array<[number, number]>;
+}
+
+export interface TripInfo {
+  tripId: string;
+  routeId: string;
+  routeShortName: string;
+  tripHeadsign: string;
+  directionId?: number;
+  serviceId?: string;
+  shapeId?: string;
+  stops: Array<{
+    stopId: string;
+    stopName: string;
+    position: [number, number];
+    arrivalTime?: string;
+    departureTime?: string;
+    stopSequence: number;
+  }>;
+}
+
 class ApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
@@ -367,6 +416,36 @@ class ApiService {
     } catch (error) {
       console.error('Transport disruptions API error:', error);
       return [];
+    }
+  }
+
+  async getVehiclesForStop(stopId: string): Promise<any[]> {
+    try {
+      const response = await this.api.get(`/api/transport/vehicles/${stopId}`);
+      return response.data.vehicles || [];
+    } catch (error) {
+      console.error('Vehicles API error:', error);
+      return [];
+    }
+  }
+
+  async getRouteDetails(routeId: string): Promise<any | null> {
+    try {
+      const response = await this.api.get(`/api/transport/route/${routeId}`);
+      return response.data.route || null;
+    } catch (error) {
+      console.error('Route details API error:', error);
+      return null;
+    }
+  }
+
+  async getTripInfo(tripId: string): Promise<any | null> {
+    try {
+      const response = await this.api.get(`/api/transport/trip/${tripId}`);
+      return response.data.trip || null;
+    } catch (error) {
+      console.error('Trip info API error:', error);
+      return null;
     }
   }
 

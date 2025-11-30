@@ -1967,6 +1967,114 @@ app.get('/api/transport/arrivals/:stopId', async (req, res) => {
   }
 });
 
+// Test BKK API endpoint
+app.get('/api/transport/test-bkk', async (req, res) => {
+  try {
+    const { lat = 47.4979, lng = 19.0402, radius = 500 } = req.query;
+    
+    const testLat = parseFloat(lat as string);
+    const testLng = parseFloat(lng as string);
+    const testRadius = parseInt(radius as string);
+
+    // Check configuration
+    const config = {
+      apiEnabled: process.env.BKK_API_ENABLED === 'true',
+      hasApiKey: !!process.env.BKK_API_KEY,
+      apiKeyLength: process.env.BKK_API_KEY?.length || 0,
+      apiBaseUrl: 'https://go.bkk.hu/api/query/v1/ws/otp/api/where'
+    };
+
+    const results: any = {
+      config,
+      testLocation: { lat: testLat, lng: testLng, radius: testRadius },
+      timestamp: new Date().toISOString()
+    };
+
+    // Test 1: Check if API is enabled
+    if (!config.apiEnabled) {
+      results.status = 'disabled';
+      results.message = 'BKK API is disabled. Set BKK_API_ENABLED=true to enable.';
+      results.recommendation = 'Add BKK_API_ENABLED=true to your .env file';
+      return res.json(results);
+    }
+
+    // Test 2: Check if API key exists
+    if (!config.hasApiKey) {
+      results.status = 'no_key';
+      results.message = 'BKK API key is missing.';
+      results.recommendation = 'Add BKK_API_KEY=your_key_here to your .env file';
+      return res.json(results);
+    }
+
+    // Test 3: Try to fetch real stops
+    try {
+      const stops = await publicTransportService.getNearbyStops(testLat, testLng, testRadius);
+      
+      results.status = 'success';
+      results.message = 'BKK API is working correctly!';
+      results.stopsFound = stops.length;
+      results.sampleStops = stops.slice(0, 3).map((stop: any) => ({
+        name: stop.name,
+        type: stop.type,
+        routes: stop.routes,
+        position: stop.position
+      }));
+      results.allStops = stops.map((stop: any) => ({
+        id: stop.id,
+        name: stop.name,
+        type: stop.type,
+        routes: stop.routes
+      }));
+
+      // Test 4: Try to get arrivals for first stop (if available)
+      if (stops.length > 0) {
+        try {
+          const arrivals = await publicTransportService.getStopArrivals(stops[0].id);
+          results.arrivalsTest = {
+            stopId: stops[0].id,
+            stopName: stops[0].name,
+            arrivalsFound: arrivals.length,
+            sampleArrivals: arrivals.slice(0, 3)
+          };
+        } catch (arrivalError: any) {
+          results.arrivalsTest = {
+            error: arrivalError.message,
+            note: 'Arrivals test failed, but stops retrieval works'
+          };
+        }
+      }
+
+    } catch (apiError: any) {
+      results.status = 'api_error';
+      results.message = 'BKK API call failed';
+      results.error = {
+        message: apiError.message,
+        code: apiError.code,
+        status: apiError.response?.status,
+        statusText: apiError.response?.statusText,
+        responseData: apiError.response?.data
+      };
+      
+      if (apiError.response?.status === 401 || apiError.response?.status === 403) {
+        results.recommendation = 'API key may be invalid or not activated. BKK requires 2 days for activation.';
+      } else if (apiError.response?.status === 429) {
+        results.recommendation = 'Rate limit exceeded. Please wait before trying again.';
+      } else {
+        results.recommendation = 'Check your API key and network connection.';
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('BKK API test error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Test endpoint error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 app.get('/api/transport/disruptions', async (req, res) => {
   try {
     const disruptions = await publicTransportService.getDisruptions();
@@ -1979,6 +2087,78 @@ app.get('/api/transport/disruptions', async (req, res) => {
     console.error('Transport disruptions error:', error);
     res.status(500).json({ 
       error: 'Failed to fetch disruptions',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get vehicles for a stop
+app.get('/api/transport/vehicles/:stopId', async (req, res) => {
+  try {
+    const { stopId } = req.params;
+    const vehicles = await publicTransportService.getVehiclesForStop(stopId);
+    res.json({
+      vehicles,
+      count: vehicles.length,
+      stopId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Transport vehicles error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch vehicles',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get route details
+app.get('/api/transport/route/:routeId', async (req, res) => {
+  try {
+    const { routeId } = req.params;
+    const routeDetails = await publicTransportService.getRouteDetails(routeId);
+    
+    if (!routeDetails) {
+      return res.status(404).json({ 
+        error: 'Route not found',
+        routeId 
+      });
+    }
+
+    res.json({
+      route: routeDetails,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Route details error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch route details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get trip information
+app.get('/api/transport/trip/:tripId', async (req, res) => {
+  try {
+    const { tripId } = req.params;
+    const tripInfo = await publicTransportService.getTripInfo(tripId);
+    
+    if (!tripInfo) {
+      return res.status(404).json({ 
+        error: 'Trip not found',
+        tripId 
+      });
+    }
+
+    res.json({
+      trip: tripInfo,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Trip info error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch trip information',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

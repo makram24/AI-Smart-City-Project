@@ -39,6 +39,55 @@ export interface TransportRoutePlan {
   }>;
 }
 
+export interface VehiclePosition {
+  vehicleId: string;
+  routeId: string;
+  routeShortName?: string;
+  tripId?: string;
+  position: [number, number];
+  bearing?: number;
+  speed?: number;
+  licensePlate?: string;
+  wheelchairAccessible?: boolean;
+  lastUpdate?: string;
+}
+
+export interface RouteDetail {
+  routeId: string;
+  routeShortName: string;
+  routeLongName: string;
+  routeType: 'bus' | 'tram' | 'metro' | 'trolley';
+  color?: string;
+  textColor?: string;
+  description?: string;
+  agencyId?: string;
+  stops?: Array<{
+    stopId: string;
+    stopName: string;
+    position: [number, number];
+    sequence: number;
+  }>;
+  shape?: Array<[number, number]>;
+}
+
+export interface TripInfo {
+  tripId: string;
+  routeId: string;
+  routeShortName: string;
+  tripHeadsign: string;
+  directionId?: number;
+  serviceId?: string;
+  shapeId?: string;
+  stops: Array<{
+    stopId: string;
+    stopName: string;
+    position: [number, number];
+    arrivalTime?: string;
+    departureTime?: string;
+    stopSequence: number;
+  }>;
+}
+
 export class PublicTransportService {
   private bkkApiBaseUrl = 'https://go.bkk.hu/api/query/v1/ws/otp/api/where';
   private bkkGtfsRtBaseUrl = 'https://go.bkk.hu/api/query/v1/ws/gtfs-rt/full';
@@ -1070,6 +1119,400 @@ export class PublicTransportService {
   private deg2rad(deg: number): number {
     return deg * (Math.PI/180);
   }
+
+  // Get vehicles for a specific stop
+  async getVehiclesForStop(stopId: string): Promise<VehiclePosition[]> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const realVehicles = await this.fetchRealVehiclesForStop(stopId);
+        if (realVehicles && realVehicles.length > 0) {
+          console.log(`✅ BKK API active! Retrieved ${realVehicles.length} vehicles for stop ${stopId}`);
+          return realVehicles;
+        }
+      } catch (error: any) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.info('💡 BKK API key not yet activated (2-day activation period)');
+        } else {
+          console.warn('⚠️ BKK vehicles API failed, falling back to mock data:', error.message);
+        }
+      }
+    }
+
+    // Fallback to mock data
+    return this.getMockVehiclesForStop(stopId);
+  }
+
+  // Fetch real vehicles from BKK FUTÁR API
+  private async fetchRealVehiclesForStop(stopId: string): Promise<VehiclePosition[]> {
+    try {
+      const cleanStopId = stopId.replace(/^stop_/, '');
+      
+      const response = await axios.get(`${this.bkkApiBaseUrl}/vehicles-for-stop`, {
+        params: {
+          stopId: cleanStopId,
+          key: this.apiKey
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 BKK Vehicles Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
+      }
+
+      // Try multiple response structures
+      let vehiclesList: any[] = [];
+      
+      if (response.data?.data?.list) {
+        vehiclesList = response.data.data.list;
+      } else if (response.data?.data?.vehicles) {
+        vehiclesList = response.data.data.vehicles;
+      } else if (Array.isArray(response.data?.data)) {
+        vehiclesList = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        vehiclesList = response.data;
+      }
+
+      if (vehiclesList && vehiclesList.length > 0) {
+        return vehiclesList.map((vehicle: any) => {
+          const lat = vehicle.lat ?? vehicle.latitude ?? vehicle.location?.lat ?? vehicle.position?.[0];
+          const lon = vehicle.lon ?? vehicle.longitude ?? vehicle.location?.lon ?? vehicle.position?.[1];
+          
+          if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
+            return null;
+          }
+
+          return {
+            vehicleId: vehicle.vehicleId || vehicle.vehicle_id || vehicle.id || `vehicle_${Date.now()}`,
+            routeId: vehicle.routeId || vehicle.route_id || vehicle.route?.id || 'Unknown',
+            routeShortName: vehicle.routeShortName || vehicle.route_short_name || vehicle.route?.shortName,
+            tripId: vehicle.tripId || vehicle.trip_id || vehicle.trip?.id,
+            position: [lat, lon],
+            bearing: vehicle.bearing !== undefined ? parseFloat(vehicle.bearing) : undefined,
+            speed: vehicle.speed !== undefined ? parseFloat(vehicle.speed) : undefined,
+            licensePlate: vehicle.licensePlate || vehicle.license_plate || vehicle.plate,
+            wheelchairAccessible: vehicle.wheelchairAccessible || vehicle.wheelchair_accessible || false,
+            lastUpdate: vehicle.lastUpdate || vehicle.last_update || new Date().toISOString()
+          };
+        }).filter((v): v is VehiclePosition => v !== null);
+      }
+
+      return [];
+    } catch (error: any) {
+      if (error.response) {
+        console.error('❌ BKK Vehicles API Error:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      }
+      throw error;
+    }
+  }
+
+  // Mock vehicles for testing
+  private getMockVehiclesForStop(stopId: string): VehiclePosition[] {
+    const mockVehicles: VehiclePosition[] = [
+      {
+        vehicleId: `vehicle_${stopId}_1`,
+        routeId: 'M2',
+        routeShortName: 'M2',
+        position: [47.4980, 19.0403],
+        bearing: 90,
+        speed: 35,
+        wheelchairAccessible: true,
+        lastUpdate: new Date().toISOString()
+      },
+      {
+        vehicleId: `vehicle_${stopId}_2`,
+        routeId: '5',
+        routeShortName: '5',
+        position: [47.4978, 19.0401],
+        bearing: 180,
+        speed: 25,
+        wheelchairAccessible: true,
+        lastUpdate: new Date().toISOString()
+      }
+    ];
+    return mockVehicles;
+  }
+
+  // Get route details including shape and stops
+  async getRouteDetails(routeId: string): Promise<RouteDetail | null> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const routeDetail = await this.fetchRealRouteDetails(routeId);
+        if (routeDetail) {
+          console.log(`✅ BKK API active! Retrieved route details for ${routeId}`);
+          return routeDetail;
+        }
+      } catch (error: any) {
+        console.warn('⚠️ BKK route details API failed, falling back to mock data:', error.message);
+      }
+    }
+
+    // Fallback to mock data
+    return this.getMockRouteDetails(routeId);
+  }
+
+  // Fetch real route details from BKK FUTÁR API
+  private async fetchRealRouteDetails(routeId: string): Promise<RouteDetail | null> {
+    try {
+      const response = await axios.get(`${this.bkkApiBaseUrl}/route`, {
+        params: {
+          routeId: routeId,
+          key: this.apiKey
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 BKK Route Details Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
+      }
+
+      const routeData = response.data?.data?.entry || response.data?.data || response.data;
+      
+      if (!routeData) {
+        return null;
+      }
+
+      const route: RouteDetail = {
+        routeId: routeData.id || routeData.routeId || routeId,
+        routeShortName: routeData.shortName || routeData.routeShortName || routeData.short_name || routeId,
+        routeLongName: routeData.longName || routeData.routeLongName || routeData.long_name || routeId,
+        routeType: this.mapStopType(routeData.type || routeData.routeType || routeData.route_type),
+        color: routeData.color,
+        textColor: routeData.textColor || routeData.text_color,
+        description: routeData.description,
+        agencyId: routeData.agencyId || routeData.agency_id
+      };
+
+      // Get route shape if available
+      if (routeData.shapeId || routeData.shape_id) {
+        try {
+          const shapeResponse = await axios.get(`${this.bkkApiBaseUrl}/shape`, {
+            params: {
+              shapeId: routeData.shapeId || routeData.shape_id,
+              key: this.apiKey
+            },
+            headers: {
+              'User-Agent': this.userAgent,
+              'Accept': 'application/json'
+            },
+            timeout: 5000
+          });
+
+          const shapeData = shapeResponse.data?.data?.entry || shapeResponse.data?.data || shapeResponse.data;
+          if (shapeData?.points && Array.isArray(shapeData.points)) {
+            route.shape = shapeData.points.map((point: any) => [
+              parseFloat(point.lat || point.latitude),
+              parseFloat(point.lon || point.longitude)
+            ]).filter((coord: any) => !isNaN(coord[0]) && !isNaN(coord[1]));
+          }
+        } catch (shapeError) {
+          console.warn('⚠️ Failed to fetch route shape:', shapeError);
+        }
+      }
+
+      // Get stops for route if available
+      if (routeData.stops && Array.isArray(routeData.stops)) {
+        route.stops = routeData.stops.map((stop: any, index: number) => ({
+          stopId: stop.id || stop.stopId || stop.stop_id,
+          stopName: stop.name || stop.stopName || stop.stop_name,
+          position: [
+            parseFloat(stop.lat || stop.latitude),
+            parseFloat(stop.lon || stop.longitude)
+          ],
+          sequence: index
+        })).filter((stop: any) => stop.stopId && !isNaN(stop.position[0]) && !isNaN(stop.position[1]));
+      }
+
+      return route;
+    } catch (error: any) {
+      if (error.response) {
+        console.error('❌ BKK Route Details API Error:', {
+          status: error.response.status,
+          statusText: error.response.statusText
+        });
+      }
+      throw error;
+    }
+  }
+
+  // Mock route details
+  private getMockRouteDetails(routeId: string): RouteDetail | null {
+    const routeType = routeId.startsWith('M') ? 'metro' : 
+                     ['4', '6', '14', '47', '49'].includes(routeId) ? 'tram' : 'bus';
+    
+    return {
+      routeId: routeId,
+      routeShortName: routeId,
+      routeLongName: `Route ${routeId}`,
+      routeType: routeType,
+      color: routeType === 'metro' ? '#dc2626' : routeType === 'tram' ? '#059669' : '#2563eb',
+      description: `Mock route details for ${routeId}`
+    };
+  }
+
+  // Get trip information
+  async getTripInfo(tripId: string): Promise<TripInfo | null> {
+    // Try real API first if enabled
+    if (this.useRealApi && this.apiKey) {
+      try {
+        const tripInfo = await this.fetchRealTripInfo(tripId);
+        if (tripInfo) {
+          console.log(`✅ BKK API active! Retrieved trip info for ${tripId}`);
+          return tripInfo;
+        }
+      } catch (error: any) {
+        console.warn('⚠️ BKK trip info API failed, falling back to mock data:', error.message);
+      }
+    }
+
+    // Fallback to mock data
+    return this.getMockTripInfo(tripId);
+  }
+
+  // Fetch real trip info from BKK FUTÁR API
+  private async fetchRealTripInfo(tripId: string): Promise<TripInfo | null> {
+    try {
+      const response = await axios.get(`${this.bkkApiBaseUrl}/trip-details`, {
+        params: {
+          tripId: tripId,
+          key: this.apiKey
+        },
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      const tripData = response.data?.data?.entry || response.data?.data || response.data;
+      
+      if (!tripData) {
+        return null;
+      }
+
+      const trip: TripInfo = {
+        tripId: tripData.id || tripData.tripId || tripId,
+        routeId: tripData.routeId || tripData.route_id || tripData.route?.id || 'Unknown',
+        routeShortName: tripData.routeShortName || tripData.route_short_name || tripData.route?.shortName || 'Unknown',
+        tripHeadsign: tripData.tripHeadsign || tripData.trip_headsign || tripData.headsign || 'Unknown',
+        directionId: tripData.directionId || tripData.direction_id,
+        serviceId: tripData.serviceId || tripData.service_id,
+        shapeId: tripData.shapeId || tripData.shape_id,
+        stops: []
+      };
+
+      // Extract stops from trip
+      if (tripData.stopTimes && Array.isArray(tripData.stopTimes)) {
+        trip.stops = tripData.stopTimes.map((stopTime: any, index: number) => ({
+          stopId: stopTime.stopId || stopTime.stop_id || stopTime.stop?.id,
+          stopName: stopTime.stopName || stopTime.stop_name || stopTime.stop?.name || 'Unknown',
+          position: stopTime.stop?.lat && stopTime.stop?.lon ? 
+            [parseFloat(stopTime.stop.lat), parseFloat(stopTime.stop.lon)] :
+            [0, 0],
+          arrivalTime: stopTime.arrivalTime || stopTime.arrival_time,
+          departureTime: stopTime.departureTime || stopTime.departure_time,
+          stopSequence: stopTime.stopSequence || stopTime.stop_sequence || index
+        })).filter((stop: any) => stop.stopId);
+      }
+
+      return trip;
+    } catch (error: any) {
+      if (error.response) {
+        console.error('❌ BKK Trip Info API Error:', {
+          status: error.response.status,
+          statusText: error.response.statusText
+        });
+      }
+      throw error;
+    }
+  }
+
+  // Mock trip info
+  private getMockTripInfo(tripId: string): TripInfo | null {
+    return {
+      tripId: tripId,
+      routeId: 'M2',
+      routeShortName: 'M2',
+      tripHeadsign: 'Örs vezér tere',
+      stops: [
+        {
+          stopId: 'stop_001',
+          stopName: 'Deák Ferenc tér M',
+          position: [47.4979, 19.0402],
+          stopSequence: 0
+        },
+        {
+          stopId: 'stop_002',
+          stopName: 'Astoria',
+          position: [47.4949, 19.0592],
+          stopSequence: 1
+        }
+      ]
+    };
+  }
+}
+
+// Export new interfaces
+export interface VehiclePosition {
+  vehicleId: string;
+  routeId: string;
+  routeShortName?: string;
+  tripId?: string;
+  position: [number, number];
+  bearing?: number;
+  speed?: number;
+  licensePlate?: string;
+  wheelchairAccessible?: boolean;
+  lastUpdate?: string;
+}
+
+export interface RouteDetail {
+  routeId: string;
+  routeShortName: string;
+  routeLongName: string;
+  routeType: 'bus' | 'tram' | 'metro' | 'trolley';
+  color?: string;
+  textColor?: string;
+  description?: string;
+  agencyId?: string;
+  stops?: Array<{
+    stopId: string;
+    stopName: string;
+    position: [number, number];
+    sequence: number;
+  }>;
+  shape?: Array<[number, number]>;
+}
+
+export interface TripInfo {
+  tripId: string;
+  routeId: string;
+  routeShortName: string;
+  tripHeadsign: string;
+  directionId?: number;
+  serviceId?: string;
+  shapeId?: string;
+  stops: Array<{
+    stopId: string;
+    stopName: string;
+    position: [number, number];
+    arrivalTime?: string;
+    departureTime?: string;
+    stopSequence: number;
+  }>;
 }
 
 export const publicTransportService = new PublicTransportService();
