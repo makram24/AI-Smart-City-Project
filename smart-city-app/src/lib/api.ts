@@ -584,10 +584,17 @@ class ApiService {
   // Health check
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.api.get('/api/health');
+      const response = await this.api.get('/api/health', {
+        timeout: 5000, // Shorter timeout for health check
+      });
       return response.status === 200;
-    } catch (error) {
-      console.error('Health check failed:', error);
+    } catch (error: any) {
+      // Network errors are expected if backend is not running
+      if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        console.info('ℹ️ Backend server not running. App will use fallback/mock responses.');
+        return false;
+      }
+      console.error('Health check failed:', error.message || error);
       return false;
     }
   }

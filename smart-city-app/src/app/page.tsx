@@ -92,10 +92,17 @@ export default function Home() {
   // Check API connection on mount
   useEffect(() => {
     const checkApi = async () => {
-      const connected = await apiService.healthCheck();
-      setApiConnected(connected);
-      if (!connected) {
-        console.warn('Backend API not connected. Using mock responses.');
+      try {
+        const connected = await apiService.healthCheck();
+        setApiConnected(connected);
+        if (!connected) {
+          console.info('ℹ️ Backend API not available. App will use fallback/mock responses.');
+        } else {
+          console.log('✅ Backend API connected successfully');
+        }
+      } catch (error) {
+        // Silently handle - health check already logs the error
+        setApiConnected(false);
       }
     };
     checkApi();

@@ -136,13 +136,24 @@ export class SafetyService {
 
     // Determine safety level
     let safetyLevel: 'safe' | 'moderate' | 'caution' | 'unsafe' = 'moderate';
-    if (inConstructionZone || lighting === 'poor' || crimeRisk === 'high') {
-      safetyLevel = 'caution';
-    } else if (lighting === 'well-lit' && crimeRisk === 'low' && !inConstructionZone) {
-      safetyLevel = 'safe';
-    } else if (crimeRisk === 'high' || (lighting === 'poor' && crimeRisk === 'medium')) {
+    
+    // Most unsafe: high crime risk with poor lighting
+    if (crimeRisk === 'high' && lighting === 'poor') {
       safetyLevel = 'unsafe';
     }
+    // Unsafe: high crime risk or poor lighting
+    else if (crimeRisk === 'high' || lighting === 'poor') {
+      safetyLevel = 'caution';
+    }
+    // Caution: construction zones or medium crime risk with poor conditions
+    else if (inConstructionZone || (crimeRisk === 'medium' && lighting !== 'well-lit')) {
+      safetyLevel = 'caution';
+    }
+    // Safe: well-lit, low crime, no construction
+    else if (lighting === 'well-lit' && crimeRisk === 'low' && !inConstructionZone) {
+      safetyLevel = 'safe';
+    }
+    // Default: moderate (already set)
 
     return {
       id: `segment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
