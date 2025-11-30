@@ -308,8 +308,18 @@ class ApiService {
         params: { address }
       });
       return response.data;
-    } catch (error) {
-      console.error('Geocoding API error:', error);
+    } catch (error: any) {
+      // 404 means address not found - this is expected for invalid addresses
+      if (error.response?.status === 404) {
+        console.info(`ℹ️ Address not found: "${address}"`);
+        return null;
+      }
+      // Network errors or other issues
+      if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        console.warn('⚠️ Backend not available for geocoding. Address:', address);
+        return null;
+      }
+      console.error('Geocoding API error:', error.response?.data || error.message || error);
       return null;
     }
   }
