@@ -685,9 +685,7 @@ const PERSONA_REGISTRY: Record<PersonaKey, PersonaDefinition> = {
     keywords: ['castle', 'museum', 'heritage', 'history', 'tour', 'bastion', 'parliament', 'gallery', 'market hall'],
     prefix: 'Culture Curator •',
     suggestions: [
-      'Share a quick history fact nearby',
-      'Find a landmark café with views',
-      'Plan a heritage walking loop'
+      'Tell me a story about the place'
     ],
     description: 'Story-rich walks, heritage sites, and curated cafés.',
     tone: 'calm',
