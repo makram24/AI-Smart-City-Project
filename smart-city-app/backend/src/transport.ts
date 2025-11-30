@@ -1178,27 +1178,31 @@ export class PublicTransportService {
       }
 
       if (vehiclesList && vehiclesList.length > 0) {
-        return vehiclesList.map((vehicle: any) => {
+        const validVehicles: VehiclePosition[] = [];
+        
+        for (const vehicle of vehiclesList) {
           const lat = vehicle.lat ?? vehicle.latitude ?? vehicle.location?.lat ?? vehicle.position?.[0];
           const lon = vehicle.lon ?? vehicle.longitude ?? vehicle.location?.lon ?? vehicle.position?.[1];
           
           if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
-            return null;
+            continue;
           }
 
-          return {
+          validVehicles.push({
             vehicleId: vehicle.vehicleId || vehicle.vehicle_id || vehicle.id || `vehicle_${Date.now()}`,
             routeId: vehicle.routeId || vehicle.route_id || vehicle.route?.id || 'Unknown',
             routeShortName: vehicle.routeShortName || vehicle.route_short_name || vehicle.route?.shortName,
             tripId: vehicle.tripId || vehicle.trip_id || vehicle.trip?.id,
-            position: [lat, lon],
+            position: [lat, lon] as [number, number],
             bearing: vehicle.bearing !== undefined ? parseFloat(vehicle.bearing) : undefined,
             speed: vehicle.speed !== undefined ? parseFloat(vehicle.speed) : undefined,
             licensePlate: vehicle.licensePlate || vehicle.license_plate || vehicle.plate,
             wheelchairAccessible: vehicle.wheelchairAccessible || vehicle.wheelchair_accessible || false,
             lastUpdate: vehicle.lastUpdate || vehicle.last_update || new Date().toISOString()
-          };
-        }).filter((v): v is VehiclePosition => v !== null);
+          });
+        }
+        
+        return validVehicles;
       }
 
       return [];
