@@ -47,6 +47,11 @@ export default function Home() {
     polyline: number[][];
     distance: string;
     duration: string;
+    mode?: 'walking' | 'cycling' | 'public_transport';
+    steps?: Array<{
+      type?: string;
+      geometry?: number[][];
+    }>;
   } | null>(null);
   const [mapFilters, setMapFilters] = useState<{
     categories: string[];
@@ -935,7 +940,12 @@ export default function Home() {
         setCurrentRoute({
           polyline: formattedPolyline,
           distance: route.distance,
-          duration: route.duration
+          duration: route.duration,
+          mode: mode as 'walking' | 'cycling' | 'public_transport',
+          steps: route.steps?.map(step => ({
+            type: step.type,
+            geometry: step.geometry
+          }))
         });
 
         // Add route message with instructions
@@ -991,8 +1001,8 @@ export default function Home() {
             }
           }}
         />
-        {/* Route Safety Indicator */}
-        {currentRoute && currentRoute.polyline && currentRoute.polyline.length >= 2 && (
+        {/* Route Safety Indicator - Only for walking/cycling routes */}
+        {currentRoute && currentRoute.polyline && currentRoute.polyline.length >= 2 && currentRoute.mode !== 'public_transport' && (
           <RouteSafetyIndicator 
             routePolyline={currentRoute.polyline}
             onSafetyData={(analysis) => {

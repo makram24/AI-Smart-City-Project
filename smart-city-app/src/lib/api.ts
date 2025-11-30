@@ -43,7 +43,13 @@ export interface MapMarker {
 export interface RouteData {
   distance: string;
   duration: string;
-  steps: Array<{ instruction: string; distance: string; type?: string; route?: string }>;
+  steps: Array<{ 
+    instruction: string; 
+    distance: string; 
+    type?: string; 
+    route?: string;
+    geometry?: number[][]; // [lat, lng] coordinates for this step segment
+  }>;
   polyline: number[][];
   mode?: 'walking' | 'cycling' | 'public_transport';
 }

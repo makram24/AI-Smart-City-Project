@@ -107,6 +107,11 @@ interface MapProps {
     polyline: number[][];
     distance: string;
     duration: string;
+    mode?: 'walking' | 'cycling' | 'public_transport';
+    steps?: Array<{
+      type?: string;
+      geometry?: number[][];
+    }>;
   };
   vehicles?: Array<{
     vehicleId: string;
@@ -458,7 +463,7 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
         {/* Route polyline with safety visualization */}
         {routeCoordinates.length > 0 && (
           <>
-            {safetyAnalysis && safetyAnalysis.segments.length > 0 ? (
+            {safetyAnalysis && safetyAnalysis.segments.length > 0 && route?.mode !== 'public_transport' ? (
               // Render safety-colored segments
               safetyAnalysis.segments.map((segment) => {
                 const segmentCoords: [number, number][] = [segment.start, segment.end];
@@ -531,11 +536,71 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
                   </Polyline>
                 );
               })
+            ) : route?.mode === 'public_transport' && route?.steps && route.steps.length > 0 ? (
+              // Render segmented public transport route with different colors for each step
+              route.steps.map((step, index) => {
+                if (!step.geometry || step.geometry.length === 0) return null;
+                
+                // Convert step geometry to valid coordinates
+                const stepCoords = step.geometry
+                  .map((coord: number[]) => {
+                    if (Array.isArray(coord) && coord.length >= 2) {
+                      const lat = coord[0];
+                      const lng = coord[1];
+                      // Validate coordinates are in Budapest
+                      if (lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5) {
+                        return [lat, lng] as [number, number];
+                      }
+                    }
+                    return null;
+                  })
+                  .filter((coord): coord is [number, number] => coord !== null);
+                
+                if (stepCoords.length === 0) return null;
+                
+                // Determine color based on step type
+                const getStepColor = (stepType?: string) => {
+                  switch (stepType) {
+                    case 'walk':
+                      return '#3b82f6'; // Blue for walking
+                    case 'bus':
+                    case 'tram':
+                    case 'metro':
+                      return '#8b5cf6'; // Purple for public transport
+                    default:
+                      return '#6b7280'; // Gray for unknown
+                  }
+                };
+                
+                const stepColor = getStepColor(step.type);
+                const stepTypeLabel = step.type === 'walk' ? '🚶 Walk' :
+                                     step.type === 'bus' ? '🚌 Bus' :
+                                     step.type === 'tram' ? '🚋 Tram' :
+                                     step.type === 'metro' ? '🚇 Metro' : '📍';
+                
+                return (
+                  <Polyline
+                    key={`step-${index}`}
+                    positions={stepCoords}
+                    color={stepColor}
+                    weight={step.type === 'walk' ? 4 : 5} // Slightly thinner for walking
+                    opacity={0.8}
+                    smoothFactor={1}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <div className="font-semibold mb-1">{stepTypeLabel}</div>
+                        <p className="text-xs text-gray-600">Step {index + 1} of {route.steps?.length || 0}</p>
+                      </div>
+                    </Popup>
+                  </Polyline>
+                );
+              })
             ) : (
-              // Default route polyline if no safety analysis
+              // Default route polyline if no safety analysis and not segmented
               <Polyline
                 positions={routeCoordinates}
-                color="#3b82f6"
+                color={route?.mode === 'public_transport' ? '#8b5cf6' : '#3b82f6'} // Purple for public transport, blue for others
                 weight={5}
                 opacity={0.8}
                 smoothFactor={1}

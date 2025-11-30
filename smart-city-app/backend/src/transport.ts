@@ -36,7 +36,9 @@ export interface TransportRoutePlan {
     to: string;
     duration: number;
     distance?: number;
+    geometry?: number[][]; // [lat, lng] coordinates for this step segment
   }>;
+  geometry?: number[][]; // [lat, lng] coordinates for the full route (combined)
 }
 
 export interface VehiclePosition {
@@ -653,8 +655,17 @@ export class PublicTransportService {
     if (this.useRealApi && this.apiKey) {
       try {
         const realJourney = await this.fetchRealJourney(from, to);
-        if (realJourney) {
-          return realJourney;
+        if (realJourney && realJourney.steps && realJourney.steps.length > 0) {
+          // Validate the journey makes sense
+          const totalDistance = realJourney.steps.reduce((sum, step) => sum + (step.distance || 0), 0);
+          const totalDuration = realJourney.duration;
+          
+          // Sanity check: if duration is more than 2 hours or distance is unreasonable, something is wrong
+          if (totalDuration < 120 && totalDistance < 50000) { // Less than 2 hours and less than 50km
+            return realJourney;
+          } else {
+            console.warn(`⚠️ BKK journey seems invalid: ${totalDuration} min, ${totalDistance}m - rejecting`);
+          }
         }
       } catch (error) {
         console.warn('BKK journey planning API failed, falling back to mock data:', error);
@@ -663,7 +674,7 @@ export class PublicTransportService {
 
     // Fallback to mock data
     try {
-      // Mock journey planning
+      // Mock journey planning with geometry
       const mockJourney: TransportRoutePlan = {
         from: 'Starting point',
         to: 'Destination',
@@ -675,21 +686,24 @@ export class PublicTransportService {
             from: 'Starting point',
             to: 'Deák Ferenc tér M',
             duration: 3,
-            distance: 200
+            distance: 200,
+            geometry: [from, [47.4979, 19.0402]] // Simple line to stop
           },
           {
             type: 'metro',
             route: 'M2',
             from: 'Deák Ferenc tér M',
             to: 'Széll Kálmán tér M',
-            duration: 8
+            duration: 8,
+            geometry: [[47.4979, 19.0402], [47.5069, 19.0245]] // Metro route
           },
           {
             type: 'walk',
             from: 'Széll Kálmán tér M',
             to: 'Destination',
             duration: 5,
-            distance: 400
+            distance: 400,
+            geometry: [[47.5069, 19.0245], to] // Walk to destination
           }
         ]
       };
@@ -699,6 +713,42 @@ export class PublicTransportService {
       console.error('Error planning journey:', error);
       return null;
     }
+  }
+
+  // Decode Google polyline format (used by BKK API)
+  private decodePolyline(encoded: string): number[][] {
+    const coordinates: number[][] = [];
+    let index = 0;
+    const len = encoded.length;
+    let lat = 0;
+    let lng = 0;
+
+    while (index < len) {
+      let b: number;
+      let shift = 0;
+      let result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      coordinates.push([lat * 1e-5, lng * 1e-5]); // Convert to [lat, lng]
+    }
+
+    return coordinates;
   }
 
   // Fetch real journey plan from BKK FUTÁR API
@@ -764,18 +814,93 @@ export class PublicTransportService {
         const itinerary = plan.itineraries?.[0] || plan.itinerary?.[0] || plan;
         
         if (itinerary && itinerary.legs) {
-          const steps = itinerary.legs.map((leg: any) => {
+          // Extract geometry from all legs
+          const allGeometry: number[][] = [];
+          
+          const steps = itinerary.legs.map((leg: any, index: number) => {
             // Handle duration - check if in seconds or milliseconds
             const durationRaw = leg.duration || 0;
             const durationSeconds = durationRaw < 10000 ? durationRaw : Math.round(durationRaw / 1000);
             
+            // Extract geometry from leg - keep it separate for each step
+            let legGeometry: number[][] = [];
+            
+            // Try to get geometry from leg
+            if (leg.legGeometry?.points) {
+              // Encoded polyline - decode it
+              try {
+                legGeometry = this.decodePolyline(leg.legGeometry.points);
+              } catch (e) {
+                console.warn(`⚠️ Failed to decode polyline for leg ${index}`);
+              }
+            } else if (leg.geometry?.coordinates) {
+              // GeoJSON coordinates array
+              legGeometry = leg.geometry.coordinates.map((coord: number[]) => {
+                // BKK API might return [lng, lat], convert to [lat, lng]
+                if (coord.length >= 2) {
+                  const lat = coord[1] || coord[0];
+                  const lng = coord[0] || coord[1];
+                  // Validate and swap if needed
+                  if (lat < 47.0 || lat > 48.0) {
+                    return [coord[1], coord[0]]; // Swap
+                  }
+                  return [lat, lng];
+                }
+                return coord;
+              });
+            } else if (leg.from?.lat && leg.from?.lon && leg.to?.lat && leg.to?.lon) {
+              // Use from/to coordinates as simple line
+              legGeometry = [
+                [leg.from.lat, leg.from.lon],
+                [leg.to.lat, leg.to.lon]
+              ];
+            } else if (leg.from?.lat && leg.from?.lng && leg.to?.lat && leg.to?.lng) {
+              // Alternative coordinate format
+              legGeometry = [
+                [leg.from.lat, leg.from.lng],
+                [leg.to.lat, leg.to.lng]
+              ];
+            }
+            
+            // Add leg geometry to combined geometry (avoid duplicates at connection points)
+            if (legGeometry.length > 0) {
+              if (allGeometry.length === 0) {
+                // First leg - add all points
+                allGeometry.push(...legGeometry);
+              } else {
+                // Subsequent legs - skip first point if it's the same as last point
+                const lastPoint = allGeometry[allGeometry.length - 1];
+                const firstPoint = legGeometry[0];
+                const isDuplicate = Math.abs(lastPoint[0] - firstPoint[0]) < 0.0001 && 
+                                    Math.abs(lastPoint[1] - firstPoint[1]) < 0.0001;
+                
+                if (isDuplicate) {
+                  allGeometry.push(...legGeometry.slice(1));
+                } else {
+                  allGeometry.push(...legGeometry);
+                }
+              }
+            }
+            
+            // Determine step type
+            const stepType = leg.mode === 'WALK' ? 'walk' : 
+                           leg.mode === 'BUS' ? 'bus' :
+                           leg.mode === 'TRAM' ? 'tram' :
+                           leg.mode === 'SUBWAY' || leg.mode === 'METRO' ? 'metro' :
+                           (leg.mode || 'unknown').toLowerCase();
+            
+            // If no geometry extracted, DON'T create fallback - mark as needing proper routing
+            // We'll handle this later with proper routing service for walking segments
+            // For public transport, we should use route shapes, not straight lines
+            
             return {
-              type: leg.mode === 'WALK' ? 'walk' : (leg.mode || 'unknown').toLowerCase(),
+              type: stepType as 'walk' | 'bus' | 'tram' | 'metro',
               route: leg.route?.shortName || leg.route?.short_name || leg.route?.longName || leg.route?.long_name || leg.routeName || undefined,
               from: leg.from?.name || leg.fromName || leg.from?.stopName || 'Unknown',
               to: leg.to?.name || leg.toName || leg.to?.stopName || 'Unknown',
               duration: Math.round(durationSeconds / 60), // Convert to minutes
-              distance: leg.distance ? Math.round(leg.distance) : undefined
+              distance: leg.distance ? Math.round(leg.distance) : undefined,
+              geometry: legGeometry.length > 0 ? legGeometry : undefined // Include geometry for this step
             };
           });
 
@@ -783,12 +908,32 @@ export class PublicTransportService {
           const totalDurationRaw = itinerary.duration || 0;
           const totalDurationSeconds = totalDurationRaw < 10000 ? totalDurationRaw : Math.round(totalDurationRaw / 1000);
 
+          // Ensure geometry starts and ends at correct points
+          if (allGeometry.length === 0 && itinerary.legs.length > 0) {
+            // Fallback: build simple geometry from leg endpoints
+            const firstLeg = itinerary.legs[0];
+            const lastLeg = itinerary.legs[itinerary.legs.length - 1];
+            
+            if (firstLeg.from?.lat && firstLeg.from?.lon) {
+              allGeometry.push([firstLeg.from.lat, firstLeg.from.lon]);
+            } else if (firstLeg.from?.lat && firstLeg.from?.lng) {
+              allGeometry.push([firstLeg.from.lat, firstLeg.from.lng]);
+            }
+            
+            if (lastLeg.to?.lat && lastLeg.to?.lon) {
+              allGeometry.push([lastLeg.to.lat, lastLeg.to.lon]);
+            } else if (lastLeg.to?.lat && lastLeg.to?.lng) {
+              allGeometry.push([lastLeg.to.lat, lastLeg.to.lng]);
+            }
+          }
+
           return {
             from: itinerary.legs[0]?.from?.name || itinerary.legs[0]?.fromName || 'Starting point',
             to: itinerary.legs[itinerary.legs.length - 1]?.to?.name || itinerary.legs[itinerary.legs.length - 1]?.toName || 'Destination',
             duration: Math.round(totalDurationSeconds / 60),
             transfers: itinerary.transfers || itinerary.numberOfTransfers || 0,
-            steps
+            steps,
+            geometry: allGeometry.length > 0 ? allGeometry : undefined
           };
         }
       }
