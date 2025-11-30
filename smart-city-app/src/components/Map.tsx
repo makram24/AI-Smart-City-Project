@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 
@@ -100,6 +100,32 @@ interface MapProps {
     distance: string;
     duration: string;
   };
+  safetyAnalysis?: {
+    segments: Array<{
+      id: string;
+      start: [number, number];
+      end: [number, number];
+      safetyLevel: 'safe' | 'moderate' | 'caution' | 'unsafe';
+      factors: {
+        lighting: 'well-lit' | 'moderate' | 'poor';
+        construction?: boolean;
+        accessibility?: 'accessible' | 'limited' | 'not-accessible';
+        crimeRisk?: 'low' | 'medium' | 'high';
+        pedestrianFriendly?: boolean;
+      };
+      description?: string;
+    }>;
+    overallSafety: 'safe' | 'moderate' | 'caution' | 'unsafe';
+    safetyScore: number;
+    warnings: string[];
+    recommendations: string[];
+  };
+  constructionZones?: Array<{
+    id: string;
+    position: [number, number];
+    radius: number;
+    description: string;
+  }>;
   filters?: {
     categories: string[];
     maxDistance: number;
@@ -134,7 +160,7 @@ function MapController({ center, zoom, routeCoordinates }: {
   return null;
 }
 
-export default function Map({ center, zoom = 13, markers = [], route, filters, onMarkerClick }: MapProps) {
+export default function Map({ center, zoom = 13, markers = [], route, safetyAnalysis, constructionZones = [], filters, onMarkerClick }: MapProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([47.4979, 19.0402]); // Budapest coordinates [lat, lng]
   const [isClient, setIsClient] = useState(false);
@@ -365,16 +391,115 @@ export default function Map({ center, zoom = 13, markers = [], route, filters, o
         
         <MapController center={finalCenter} zoom={zoom} routeCoordinates={routeCoordinates} />
         
-        {/* Route polyline */}
+        {/* Construction Zones */}
+        {constructionZones.map((zone) => (
+          <Circle
+            key={zone.id}
+            center={zone.position}
+            radius={zone.radius}
+            pathOptions={{
+              color: '#f59e0b',
+              fillColor: '#fbbf24',
+              fillOpacity: 0.2,
+              weight: 2,
+              dashArray: '10, 5'
+            }}
+          >
+            <Popup>
+              <div className="text-sm">
+                <strong className="text-amber-900">⚠️ Construction Zone</strong>
+                <p className="text-xs text-gray-600 mt-1">{zone.description}</p>
+              </div>
+            </Popup>
+          </Circle>
+        ))}
+
+        {/* Route polyline with safety visualization */}
         {routeCoordinates.length > 0 && (
           <>
-            <Polyline
-              positions={routeCoordinates}
-              color="#3b82f6"
-              weight={5}
-              opacity={0.8}
-              smoothFactor={1}
-            />
+            {safetyAnalysis && safetyAnalysis.segments.length > 0 ? (
+              // Render safety-colored segments
+              safetyAnalysis.segments.map((segment) => {
+                const segmentCoords: [number, number][] = [segment.start, segment.end];
+                const getSafetyColor = (level: string) => {
+                  switch (level) {
+                    case 'safe': return '#10b981'; // green
+                    case 'moderate': return '#3b82f6'; // blue
+                    case 'caution': return '#f59e0b'; // amber
+                    case 'unsafe': return '#ef4444'; // red
+                    default: return '#6b7280'; // gray
+                  }
+                };
+                const getSafetyWeight = (level: string) => {
+                  return level === 'unsafe' || level === 'caution' ? 7 : 5;
+                };
+                
+                return (
+                  <Polyline
+                    key={segment.id}
+                    positions={segmentCoords}
+                    color={getSafetyColor(segment.safetyLevel)}
+                    weight={getSafetyWeight(segment.safetyLevel)}
+                    opacity={0.85}
+                    smoothFactor={1}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <div className={`font-semibold mb-1 ${
+                          segment.safetyLevel === 'safe' ? 'text-green-700' :
+                          segment.safetyLevel === 'moderate' ? 'text-blue-700' :
+                          segment.safetyLevel === 'caution' ? 'text-amber-700' :
+                          'text-red-700'
+                        }`}>
+                          {segment.safetyLevel === 'safe' ? '✅ Safe' :
+                           segment.safetyLevel === 'moderate' ? 'ℹ️ Moderate' :
+                           segment.safetyLevel === 'caution' ? '⚠️ Caution' :
+                           '🚨 Unsafe'}
+                        </div>
+                        {segment.description && (
+                          <p className="text-xs text-gray-600 mb-2">{segment.description}</p>
+                        )}
+                        <div className="text-xs space-y-1">
+                          {segment.factors.lighting && (
+                            <div className="flex items-center gap-1">
+                              <span>💡</span>
+                              <span className="capitalize">{segment.factors.lighting.replace('-', ' ')}</span>
+                            </div>
+                          )}
+                          {segment.factors.construction && (
+                            <div className="flex items-center gap-1 text-amber-600">
+                              <span>🚧</span>
+                              <span>Construction zone</span>
+                            </div>
+                          )}
+                          {segment.factors.accessibility && (
+                            <div className="flex items-center gap-1">
+                              <span>♿</span>
+                              <span className="capitalize">{segment.factors.accessibility.replace('-', ' ')}</span>
+                            </div>
+                          )}
+                          {segment.factors.crimeRisk && (
+                            <div className="flex items-center gap-1">
+                              <span>🛡️</span>
+                              <span className="capitalize">{segment.factors.crimeRisk} crime risk</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Popup>
+                  </Polyline>
+                );
+              })
+            ) : (
+              // Default route polyline if no safety analysis
+              <Polyline
+                positions={routeCoordinates}
+                color="#3b82f6"
+                weight={5}
+                opacity={0.8}
+                smoothFactor={1}
+              />
+            )}
             {/* Start marker - ONLY if coordinate is valid and in Budapest */}
             {routeCoordinates.length > 0 && (() => {
               const startCoord = routeCoordinates[0];

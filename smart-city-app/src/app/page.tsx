@@ -953,6 +953,8 @@ export default function Home() {
           zoom={13}
           markers={mapMarkers}
           route={currentRoute || undefined}
+          safetyAnalysis={routeSafetyAnalysis || undefined}
+          constructionZones={constructionZones}
           filters={mapFilters}
           onMarkerClick={(position, title) => {
             if (userLocation) {
@@ -967,20 +969,13 @@ export default function Home() {
             routePolyline={currentRoute.polyline}
             onSafetyData={(analysis) => {
               setRouteSafetyAnalysis(analysis);
-              // Add construction zone markers
-              if (userLocation) {
-                apiService.getConstructionZones(userLocation.lat, userLocation.lng, 1000).then(zones => {
-                  const zoneMarkers = zones.map(zone => ({
-                    position: zone.position,
-                    title: 'Construction Zone',
-                    description: zone.description,
-                    type: 'default' as any
-                  }));
-                  setConstructionZones(zoneMarkers);
-                  setMapMarkers(prev => {
-                    const filtered = prev.filter(m => m.title !== 'Construction Zone');
-                    return [...filtered, ...zoneMarkers];
-                  });
+              // Load construction zones for the route area
+              if (currentRoute.polyline && currentRoute.polyline.length > 0) {
+                // Use the midpoint of the route to find nearby construction zones
+                const midIndex = Math.floor(currentRoute.polyline.length / 2);
+                const midPoint = currentRoute.polyline[midIndex];
+                apiService.getConstructionZones(midPoint[0], midPoint[1], 1000).then(zones => {
+                  setConstructionZones(zones);
                 });
               }
             }}
