@@ -194,6 +194,54 @@ export interface StoryTrigger {
   shouldShow: boolean;
 }
 
+export interface TransportFeedback {
+  id: string;
+  routeId: string;
+  routeType: 'bus' | 'tram' | 'metro' | 'trolley';
+  sentiment: 'positive' | 'neutral' | 'negative';
+  reliability: number;
+  comment?: string;
+  timestamp: string;
+  userId?: string;
+  trustScore: number;
+  verified: boolean;
+}
+
+export interface RouteConfidence {
+  routeId: string;
+  routeType: 'bus' | 'tram' | 'metro' | 'trolley';
+  averageReliability: number;
+  sentiment: 'positive' | 'neutral' | 'negative';
+  feedbackCount: number;
+  lastUpdated: string;
+  confidenceLevel: 'high' | 'medium' | 'low';
+}
+
+export interface SafetySegment {
+  id: string;
+  start: [number, number];
+  end: [number, number];
+  safetyLevel: 'safe' | 'moderate' | 'caution' | 'unsafe';
+  factors: {
+    lighting: 'well-lit' | 'moderate' | 'poor';
+    construction?: boolean;
+    accessibility?: 'accessible' | 'limited' | 'not-accessible';
+    crimeRisk?: 'low' | 'medium' | 'high';
+    pedestrianFriendly?: boolean;
+  };
+  description?: string;
+  lastUpdated: string;
+}
+
+export interface RouteSafetyAnalysis {
+  routeId: string;
+  segments: SafetySegment[];
+  overallSafety: 'safe' | 'moderate' | 'caution' | 'unsafe';
+  safetyScore: number;
+  warnings: string[];
+  recommendations: string[];
+}
+
 class ApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,

@@ -27,9 +27,10 @@ interface TransportPanelProps {
   onRouteRequest: (mode: 'walking' | 'cycling' | 'public_transport', destination: string) => void;
   onTransportStopsChange?: (stops: TransportStop[]) => void;
   onBikeStationsChange?: (stations: BikeStation[]) => void;
+  onClose?: () => void;
 }
 
-export default function TransportPanel({ userLocation, onRouteRequest, onTransportStopsChange, onBikeStationsChange }: TransportPanelProps) {
+export default function TransportPanel({ userLocation, onRouteRequest, onTransportStopsChange, onBikeStationsChange, onClose }: TransportPanelProps) {
   const [transportStops, setTransportStops] = useState<TransportStop[]>([]);
   const [bikeStations, setBikeStations] = useState<BikeStation[]>([]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -120,8 +121,19 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
   return (
     <div className="h-full bg-white border-l border-gray-200 flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Transport & Weather</h2>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded transition"
+            title="Close Transport Panel"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Weather Section */}

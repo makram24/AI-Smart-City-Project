@@ -60,6 +60,12 @@ export default function Home() {
   const [activePersona, setActivePersona] = useState<PersonaContext | null>(null);
   const [activeStory, setActiveStory] = useState<StoryCard | null>(null);
   const [storyTriggers, setStoryTriggers] = useState<StoryTrigger[]>([]);
+  
+  // Visibility states for all components
+  const [isChatVisible, setIsChatVisible] = useState(true);
+  const [isTransportPanelVisible, setIsTransportPanelVisible] = useState(true);
+  const [isMapFiltersVisible, setIsMapFiltersVisible] = useState(true);
+  const [isPlaybooksVisible, setIsPlaybooksVisible] = useState(true);
 
   const sanitizeRoute = (route?: ChatMessage["route"] | null) => {
     if (!route || !route.polyline) {
@@ -945,17 +951,39 @@ export default function Home() {
             }
           }}
         />
-        <MapFilters 
-          onFiltersChange={setMapFilters}
-          userLocation={userLocation}
-        />
-        <NeighborhoodPlaybooks 
-          playbooks={playbooks}
-          selectedId={selectedPlaybook?.id || null}
-          loadingId={loadingPlaybookId}
-          disabled={!apiConnected}
-          onSelect={handlePlaybookSelect}
-        />
+        {isMapFiltersVisible ? (
+          <MapFilters 
+            onFiltersChange={setMapFilters}
+            userLocation={userLocation}
+            onClose={() => setIsMapFiltersVisible(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setIsMapFiltersVisible(true)}
+            className="absolute top-4 left-4 z-20 bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition"
+            title="Show Map Filters"
+          >
+            <span className="text-xl">🔍</span>
+          </button>
+        )}
+        {isPlaybooksVisible ? (
+          <NeighborhoodPlaybooks 
+            playbooks={playbooks}
+            selectedId={selectedPlaybook?.id || null}
+            loadingId={loadingPlaybookId}
+            disabled={!apiConnected}
+            onSelect={handlePlaybookSelect}
+            onClose={() => setIsPlaybooksVisible(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setIsPlaybooksVisible(true)}
+            className="absolute bottom-6 left-4 z-20 bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition"
+            title="Show Neighborhood Playbooks"
+          >
+            <span className="text-xl">📖</span>
+          </button>
+        )}
         {apiConnected && (
           <Moodboard 
             userLocation={userLocation}
@@ -990,11 +1018,13 @@ export default function Home() {
       </div>
       
       {/* Transport Panel - Middle */}
-      <div className="w-80 h-full">
-        <TransportPanel 
-          userLocation={userLocation}
-          onRouteRequest={handleRouteRequest}
-          onTransportStopsChange={(stops) => {
+      {isTransportPanelVisible ? (
+        <div className="w-80 h-full">
+          <TransportPanel 
+            userLocation={userLocation}
+            onRouteRequest={handleRouteRequest}
+            onClose={() => setIsTransportPanelVisible(false)}
+            onTransportStopsChange={(stops) => {
             // Convert transport stops to map markers
             const stopMarkers = stops.map(stop => ({
               position: stop.position as [number, number], // [lat, lng] format
@@ -1032,20 +1062,31 @@ export default function Home() {
             });
           }}
         />
-      </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsTransportPanelVisible(true)}
+          className="absolute top-1/2 left-0 transform -translate-y-1/2 z-20 bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition ml-2"
+          title="Show Transport Panel"
+        >
+          <span className="text-xl">🚋</span>
+        </button>
+      )}
       
       {/* Chat Section - Right Side */}
-      <div className="w-96 h-full relative flex flex-col">
-        <div className="flex-1 min-h-0">
-          <Chat 
-            onSendMessage={handleSendMessage}
-            messages={messages}
-            isLoading={isLoading}
-            persona={activePersona}
-            onPersonaPrompt={handlePersonaPrompt}
-            isPlaybookActive={!!selectedPlaybook}
-          />
-        </div>
+      {isChatVisible ? (
+        <div className="w-96 h-full relative flex flex-col">
+          <div className="flex-1 min-h-0">
+            <Chat 
+              onSendMessage={handleSendMessage}
+              messages={messages}
+              isLoading={isLoading}
+              persona={activePersona}
+              onPersonaPrompt={handlePersonaPrompt}
+              isPlaybookActive={!!selectedPlaybook}
+              onClose={() => setIsChatVisible(false)}
+            />
+          </div>
         {selectedPlaybook && (
           <div className="border-t border-border bg-white p-4 space-y-3">
             <div>
@@ -1080,12 +1121,21 @@ export default function Home() {
           </div>
         )}
         
-        {/* API Status Indicator */}
-        <div className="absolute bottom-2 right-2">
-          <div className={`w-3 h-3 rounded-full ${apiConnected ? 'bg-green-500' : 'bg-yellow-500'}`} 
-               title={apiConnected ? 'Backend connected' : 'Using mock data'} />
+          {/* API Status Indicator */}
+          <div className="absolute bottom-2 right-2">
+            <div className={`w-3 h-3 rounded-full ${apiConnected ? 'bg-green-500' : 'bg-yellow-500'}`} 
+                 title={apiConnected ? 'Backend connected' : 'Using mock data'} />
+          </div>
         </div>
-      </div>
+      ) : (
+        <button
+          onClick={() => setIsChatVisible(true)}
+          className="absolute top-1/2 right-0 transform -translate-y-1/2 z-20 bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition mr-2"
+          title="Show Chat"
+        >
+          <span className="text-xl">💬</span>
+        </button>
+      )}
     </div>
   );
 }

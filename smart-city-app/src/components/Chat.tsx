@@ -13,9 +13,10 @@ interface ChatProps {
   persona?: PersonaContext | null;
   onPersonaPrompt?: (prompt: string) => void;
   isPlaybookActive?: boolean;
+  onClose?: () => void;
 }
 
-export default function Chat({ onSendMessage, messages, isLoading, persona, onPersonaPrompt, isPlaybookActive = false }: ChatProps) {
+export default function Chat({ onSendMessage, messages, isLoading, persona, onPersonaPrompt, isPlaybookActive = false, onClose }: ChatProps) {
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -55,11 +56,24 @@ export default function Chat({ onSendMessage, messages, isLoading, persona, onPe
   return (
     <div className="flex flex-col h-full bg-background border-l border-border">
       {/* Chat Header */}
-      <div className="p-4 border-b border-border">
-        <h2 className="text-lg font-semibold">AI City Assistant</h2>
-        <p className="text-sm text-muted-foreground">
-          Ask me anything about Budapest!
-        </p>
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">AI City Assistant</h2>
+          <p className="text-sm text-muted-foreground">
+            Ask me anything about Budapest!
+          </p>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded transition"
+            title="Close Chat"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Quick Actions - Hidden when playbook is active */}

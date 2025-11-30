@@ -21,6 +21,7 @@ interface MapFiltersProps {
     maxDistance: number;
   }) => void;
   userLocation: { lat: number; lng: number } | null;
+  onClose?: () => void;
 }
 
 const categoryIcons = {
@@ -45,7 +46,7 @@ const categoryLabels = {
   bike_station: "Bike Stations",
 };
 
-export default function MapFilters({ onFiltersChange, userLocation }: MapFiltersProps) {
+export default function MapFilters({ onFiltersChange, userLocation, onClose }: MapFiltersProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [maxDistance, setMaxDistance] = useState<number>(2); // km
   const [isOpen, setIsOpen] = useState(false);

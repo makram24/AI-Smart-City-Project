@@ -14,6 +14,8 @@ import { weatherService } from './weather';
 import { routingService } from './routing';
 import { neighborhoodPlaybookService } from './playbooks';
 import { moodboardService } from './moodboard';
+import { communityService, TransportFeedback, RouteConfidence } from './community';
+import { safetyService, RouteSafetyAnalysis } from './safety';
 import { storyService } from './stories';
 import { isWithinBudapest, normalizeCoordinate, BUDAPEST_BOUNDS } from './utils/geoValidation';
 import { InMemoryCache } from './utils/cache';
@@ -2232,6 +2234,184 @@ app.get('/api/stories/near-point', (req, res) => {
     console.error('Stories near point error:', error);
     res.status(500).json({
       error: 'Failed to find stories near point',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================
+// Phase 5: Community & Safety Network
+// ============================================
+
+// Community Confidence Signals - Submit feedback
+app.post('/api/community/feedback', (req, res) => {
+  try {
+    const { routeId, routeType, sentiment, reliability, comment, userId } = req.body;
+
+    if (!routeId || !routeType || !sentiment || !reliability) {
+      return res.status(400).json({ error: 'Missing required fields: routeId, routeType, sentiment, reliability' });
+    }
+
+    if (!['bus', 'tram', 'metro', 'trolley'].includes(routeType)) {
+      return res.status(400).json({ error: 'Invalid routeType. Must be: bus, tram, metro, or trolley' });
+    }
+
+    if (!['positive', 'neutral', 'negative'].includes(sentiment)) {
+      return res.status(400).json({ error: 'Invalid sentiment. Must be: positive, neutral, or negative' });
+    }
+
+    if (reliability < 1 || reliability > 5) {
+      return res.status(400).json({ error: 'Reliability must be between 1 and 5' });
+    }
+
+    const feedback = communityService.submitFeedback({
+      routeId,
+      routeType,
+      sentiment,
+      reliability,
+      comment,
+      userId
+    });
+
+    res.json({
+      feedback,
+      message: 'Feedback submitted successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Community feedback error:', error);
+    res.status(500).json({
+      error: 'Failed to submit feedback',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get confidence signals for a route
+app.get('/api/community/confidence/:routeType/:routeId', (req, res) => {
+  try {
+    const { routeType, routeId } = req.params;
+
+    if (!['bus', 'tram', 'metro', 'trolley'].includes(routeType)) {
+      return res.status(400).json({ error: 'Invalid routeType' });
+    }
+
+    const confidence = communityService.getRouteConfidence(routeId, routeType as any);
+
+    if (!confidence) {
+      return res.status(404).json({ 
+        error: 'No confidence data available for this route',
+        routeId,
+        routeType
+      });
+    }
+
+    res.json({
+      confidence,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Route confidence error:', error);
+    res.status(500).json({
+      error: 'Failed to get route confidence',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get confidence signals for multiple routes
+app.post('/api/community/confidence/batch', (req, res) => {
+  try {
+    const { routes } = req.body;
+
+    if (!Array.isArray(routes) || routes.length === 0) {
+      return res.status(400).json({ error: 'routes must be a non-empty array' });
+    }
+
+    const confidences = communityService.getMultipleRouteConfidences(routes);
+
+    res.json({
+      confidences,
+      count: confidences.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Batch confidence error:', error);
+    res.status(500).json({
+      error: 'Failed to get batch confidence',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Safety Analysis - Analyze route safety
+app.post('/api/safety/analyze-route', (req, res) => {
+  try {
+    const { polyline } = req.body;
+
+    if (!polyline || !Array.isArray(polyline) || polyline.length < 2) {
+      return res.status(400).json({ error: 'polyline must be an array with at least 2 points' });
+    }
+
+    // Validate all coordinates are in Budapest
+    const allValid = polyline.every((point: any) => {
+      if (!Array.isArray(point) || point.length < 2) return false;
+      const [lat, lng] = point;
+      return isWithinBudapest(lat, lng);
+    });
+
+    if (!allValid) {
+      return res.status(400).json({ error: 'All route points must be within Budapest area' });
+    }
+
+    const analysis = safetyService.analyzeRouteSafety(polyline);
+
+    res.json({
+      analysis,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Route safety analysis error:', error);
+    res.status(500).json({
+      error: 'Failed to analyze route safety',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get construction zones near a point
+app.get('/api/safety/construction-zones', (req, res) => {
+  try {
+    const { lat, lng, radius = 500 } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const pointLat = parseFloat(lat as string);
+    const pointLng = parseFloat(lng as string);
+
+    if (!isWithinBudapest(pointLat, pointLng)) {
+      return res.status(400).json({ error: 'Point must be within Budapest area' });
+    }
+
+    const zones = safetyService.getConstructionZonesNearPoint(
+      pointLat,
+      pointLng,
+      parseInt(radius as string)
+    );
+
+    res.json({
+      zones,
+      count: zones.length,
+      location: { lat: pointLat, lng: pointLng },
+      radius: parseInt(radius as string),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Construction zones error:', error);
+    res.status(500).json({
+      error: 'Failed to get construction zones',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

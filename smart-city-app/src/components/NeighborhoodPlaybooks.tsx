@@ -18,13 +18,14 @@ function NeighborhoodPlaybooksComponent({
   selectedId,
   loadingId,
   disabled,
-  onSelect
+  onSelect,
+  onClose
 }: NeighborhoodPlaybooksProps) {
   return (
     <div className="absolute bottom-6 left-4 z-20 w-80">
       <div className="bg-white/95 backdrop-blur rounded-xl shadow-2xl border border-gray-100">
         <div className="p-4 border-b border-gray-100 flex items-start justify-between">
-          <div>
+          <div className="flex-1">
             <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">
               Neighborhood Playbooks
             </p>
@@ -35,7 +36,20 @@ function NeighborhoodPlaybooksComponent({
               Tap to load markers, story, and route.
             </p>
           </div>
-          <Sparkles className="w-5 h-5 text-yellow-500" />
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-yellow-500" />
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-gray-100 rounded transition"
+                title="Close Playbooks"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
