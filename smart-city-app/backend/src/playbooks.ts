@@ -74,8 +74,6 @@ const budapestPlaybooks: PlaybookDetail[] = [
     ],
     recommendedPrompts: [
       'Tell me a story about Buda Castle’s royal past',
-      'Find nearby cafés with terrace seating',
-      'Plan a route from the Chain Bridge to Matthias Church'
     ],
     markers: [
       {
@@ -156,8 +154,6 @@ const budapestPlaybooks: PlaybookDetail[] = [
       'Carry a light jacket; the river breeze cools quickly after sunset.'
     ],
     recommendedPrompts: [
-      'Show tram times for line 2 this evening',
-      'Find riverside bars with Danube views',
       'Plan a walking route from Parliament to Liberty Bridge'
     ],
     markers: [
@@ -209,82 +205,6 @@ const budapestPlaybooks: PlaybookDetail[] = [
       ]
     }
   },
-  {
-    id: 'grand-boulevard-commute',
-    title: 'Grand Boulevard Commute Coach',
-    persona: 'Daily Flow Optimizer',
-    tagline: 'Reliable transfers along Budapest’s busiest ring.',
-    durationLabel: '25 min multimodal',
-    distanceLabel: '4.1 km',
-    focusArea: 'Nyugati → Corvin Quarter',
-    heroImage: 'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=900&auto=format&fit=crop',
-    tags: ['commute', 'transfer hacks', 'multimodal'],
-    bestFor: ['Office commute', 'University runs', 'Errand stacking'],
-    mood: 'Efficient but human—mix metro, tram, and bike docks with café pit stops.',
-    highlightStops: [
-      'Nyugati tér: choose Tram 4/6 or Metro M3 based on delay feed.',
-      'József körút: grab bikeshare if traffic slows.',
-      'Corvin: switch to M3 underground walkway to avoid crossings.'
-    ],
-    insights: [
-      'Tram 4/6 arrives every 2 min peak hours—rarely worth detouring underground.',
-      'If MOL Bubi docks are empty, walk two blocks toward Rákóczi tér for refills.',
-      'Rain forecast? Switch to M3 early; platforms stay calmer than street level.'
-    ],
-    recommendedPrompts: [
-      'Check Tram 4 delays right now',
-      'Find MOL Bubi bikes near József körút',
-      'Best café near Corvin for remote work'
-    ],
-    markers: [
-      {
-        id: 'nyugati-square',
-        title: 'Nyugati tér Hub',
-        description: 'Metro M3 + Tram 4/6 + Nyugati railway combo.',
-        position: [47.5103, 19.0583],
-        type: 'metro',
-        tip: 'Track Tram 4/6 headways on the arrival boards above platform.'
-      },
-      {
-        id: 'octogon',
-        title: 'Oktogon Transfer',
-        description: 'Quick tram-to-bike switch thanks to MOL Bubi docks.',
-        position: [47.5053, 19.0659],
-        type: 'bike_station',
-        tip: 'If docks empty, walk toward Andrássy for backup stations.'
-      },
-      {
-        id: 'corvin-quarter',
-        title: 'Corvin Quarter',
-        description: 'Last-mile hub with cafés, coworking, and tram access.',
-        position: [47.4854, 19.0726],
-        type: 'playbook',
-        tip: 'Use the covered passage to slip directly into Corvin Plaza.'
-      }
-    ],
-    narrative: 'Use this coach when you need a reliable cross-town commute. It keeps you on the Grand Boulevard spine, mixing tram certainty with optional metro and bikeshare pivots.',
-    primaryRoute: {
-      mode: 'public_transport',
-      summary: 'Tram 4/6: Nyugati to Corvin-negyed',
-      distance: km(4.1),
-      duration: minutes(25),
-      start: [47.5103, 19.0583],
-      end: [47.4854, 19.0726],
-      polyline: [
-        [47.5103, 19.0583],
-        [47.5053, 19.0659],
-        [47.4985, 19.0698],
-        [47.493, 19.0718],
-        [47.4854, 19.0726]
-      ],
-      steps: [
-        { instruction: 'Board Tram 4/6 at Nyugati tér (direction Újbuda-központ)', distance: 'N/A', type: 'tram', route: 'Tram 4/6' },
-        { instruction: 'Monitor arrivals at Oktogon—switch to bikeshare if delays >4 min', distance: 'N/A', type: 'bike_station' },
-        { instruction: 'Continue past Blaha Lujza tér toward Corvin-negyed stop', distance: 'N/A', type: 'tram', route: 'Tram 4/6' },
-        { instruction: 'Exit at Corvin-negyed and follow underground passage to plaza', distance: 'N/A', type: 'walking' }
-      ]
-    }
-  }
 ];
 
 export class NeighborhoodPlaybookService {

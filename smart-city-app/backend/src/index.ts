@@ -655,7 +655,7 @@ class GeospatialService {
 
 const geospatialService = new GeospatialService();
 
-type PersonaKey = 'culture_curator' | 'daily_flow_optimizer' | 'evening_compass' | 'mobility_hacker' | 'local_concierge';
+type PersonaKey = 'culture_curator' | 'evening_compass' | 'mobility_hacker' | 'local_concierge';
 
 interface PersonaDefinition {
   id: PersonaKey;
@@ -691,21 +691,6 @@ const PERSONA_REGISTRY: Record<PersonaKey, PersonaDefinition> = {
     tone: 'calm',
     recommendedPlaybookId: 'castle-district-heritage',
     fallbackMessage: 'Culture Curator ready. I can line up museums, castles, cafés, and narrated walks across Budapest.'
-  },
-  daily_flow_optimizer: {
-    id: 'daily_flow_optimizer',
-    label: 'Daily Flow Optimizer',
-    keywords: ['commute', 'office', 'work', 'meeting', 'tram', 'metro', 'transfer', 'pharmacy', 'errand', 'bank'],
-    prefix: 'Daily Flow •',
-    suggestions: [
-      'Show tram delays around me',
-      'Find the nearest pharmacy',
-      'Plan the fastest commute'
-    ],
-    description: 'Keeps errands, commutes, and essential stops efficient.',
-    tone: 'practical',
-    recommendedPlaybookId: 'grand-boulevard-commute',
-    fallbackMessage: 'Daily Flow Optimizer online. Ask me for tram schedules, metro transfers, or fast multimodal commutes.'
   },
   evening_compass: {
     id: 'evening_compass',
@@ -1259,9 +1244,9 @@ Always provide accurate historical facts, architectural details, and cultural si
     if (['restaurant', 'restaurants', 'food', 'hotel'].includes(normalized)) {
       return this.getPersonaById('evening_compass');
     }
-    if (['pharmacy', 'pharmacies', 'bank', 'atm', 'hospital', 'clinic', 'gas', 'parking'].includes(normalized)) {
-      return this.getPersonaById('daily_flow_optimizer');
-    }
+    // if (['pharmacy', 'pharmacies', 'bank', 'atm', 'hospital', 'clinic', 'gas', 'parking'].includes(normalized)) {
+    //   return this.getPersonaById('daily_flow_optimizer');
+    // }
     if (['cafe', 'cafes'].includes(normalized)) {
       return this.getPersonaById('culture_curator');
     }
