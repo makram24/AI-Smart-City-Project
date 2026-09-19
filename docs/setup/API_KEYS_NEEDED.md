@@ -33,7 +33,7 @@
 OPENROUTESERVICE_API_KEY=your_actual_api_key_here
 ```
 
-**See `OPENROUTESERVICE_SETUP.md` for detailed setup instructions!**
+**See [OpenRouteService setup](OPENROUTESERVICE_SETUP.md) for detailed setup instructions!**
 
 ---
 

@@ -138,7 +138,7 @@ Step 2: Take M2 metro to Széll Kálmán tér M (8 min)
 Step 3: Walk to destination (5 min, 400m)
 ```
 
-**📖 For detailed guide, see: `BKK_JOURNEY_PLANNING_GUIDE.md`**
+**For the detailed guide, see [BKK journey planning](BKK_JOURNEY_PLANNING_GUIDE.md).**
 
 ---
 

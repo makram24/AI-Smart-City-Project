@@ -1,6 +1,8 @@
-# AI Smart City Project - Phase 2 Complete! 🎉
+# AI Smart City app
 
 A web application with an interactive map on the left and AI chat interface on the right, designed for Budapest city services and navigation.
+
+The repository overview, quick start, and documentation index are in the [root README](../README.md) and [`docs/`](../docs/README.md).
 
 ## 🚀 Phase 2 Features (NEW!)
 
@@ -215,4 +217,4 @@ This project is part of the AI Smart City initiative for Budapest.
 - ✅ Enhanced weather service
 - ✅ Real API support with graceful fallbacks
 
-See `PHASE3_IMPLEMENTATION.md` for detailed implementation guide.
+See [Phase 3 implementation](../docs/guides/PHASE3_IMPLEMENTATION.md) for the detailed implementation guide.

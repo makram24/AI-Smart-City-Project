@@ -117,7 +117,7 @@
 - [ ] Pin tweet (optional)
 
 ### **GitHub**
-- [ ] Add video to README.md
+- [ ] Add video to the [root README](../../README.md)
 - [ ] Create "Showcase" section
 - [ ] Update project description
 - [ ] Add video link to About section
