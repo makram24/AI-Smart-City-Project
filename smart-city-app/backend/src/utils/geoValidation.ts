@@ -1,3 +1,4 @@
+/** Keep in sync with smart-city-app/src/lib/geoValidation.ts */
 export const BUDAPEST_BOUNDS = {
   latMin: 47.3,
   latMax: 47.7,

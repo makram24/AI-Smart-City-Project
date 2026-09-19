@@ -1,3 +1,4 @@
+/** Keep in sync with smart-city-app/backend/src/utils/geoValidation.ts */
 export const BUDAPEST_BOUNDS = {
   latMin: 47.3,
   latMax: 47.7,
@@ -23,7 +24,7 @@ export const normalizeCoordinate = (coord: Coordinate | null | undefined): Coord
 
   let [lat, lng] = coord;
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+  if (typeof lat !== "number" || typeof lng !== "number" || Number.isNaN(lat) || Number.isNaN(lng)) {
     return null;
   }
 
@@ -32,5 +33,11 @@ export const normalizeCoordinate = (coord: Coordinate | null | undefined): Coord
   }
 
   return isWithinBudapest(lat, lng) ? [lat, lng] : null;
+};
+
+export const clampToBudapest = (lat: number, lng: number): Coordinate => {
+  const clampedLat = Math.min(Math.max(lat, BUDAPEST_BOUNDS.latMin), BUDAPEST_BOUNDS.latMax);
+  const clampedLng = Math.min(Math.max(lng, BUDAPEST_BOUNDS.lngMin), BUDAPEST_BOUNDS.lngMax);
+  return [clampedLat, clampedLng];
 };
 

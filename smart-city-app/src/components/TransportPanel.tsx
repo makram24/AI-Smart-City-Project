@@ -59,14 +59,11 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
     
     setLoading(true);
     try {
-      console.log('Loading transport data for location:', userLocation);
       const [stops, bikes] = await Promise.all([
         apiService.getTransportStops(userLocation.lat, userLocation.lng, 500),
         apiService.getBikeStations(userLocation.lat, userLocation.lng, 1000)
       ]);
       
-      console.log('Transport stops loaded:', stops);
-      console.log('Bike stations loaded:', bikes);
       
       setTransportStops(stops);
       setBikeStations(bikes);
@@ -86,11 +83,26 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
     }
   };
 
+  const loadRouteConfidences = async () => {
+    if (transportStops.length === 0) return;
+    const routes = transportStops.flatMap((stop) =>
+      stop.routes.map((routeId) => ({ routeId, routeType: stop.type }))
+    );
+    try {
+      const confidences = await apiService.getMultipleRouteConfidences(routes);
+      const next = new Map<string, RouteConfidence>();
+      confidences.forEach((confidence) => {
+        next.set(`${confidence.routeType}_${confidence.routeId}`, confidence);
+      });
+      setRouteConfidences(next);
+    } catch (error) {
+      console.error("Failed to load route confidence:", error);
+    }
+  };
+
   const loadWeatherData = async () => {
     try {
-      console.log('Loading weather data...');
       const weatherData = await apiService.getCurrentWeather();
-      console.log('Weather data loaded:', weatherData);
       if (weatherData) {
         setWeather(weatherData.weather);
         setWeatherContext(weatherData.context);
@@ -285,7 +297,6 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                     const handleStopClick = () => {
                       if (onRouteRequest && stop.position) {
                         const destination = `${stop.position[0]},${stop.position[1]}`;
-                        console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
                         onRouteRequest('walking', destination);
                       }
                       // Load vehicles for this stop
@@ -359,7 +370,6 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                     const handleStopClick = () => {
                       if (onRouteRequest && stop.position) {
                         const destination = `${stop.position[0]},${stop.position[1]}`;
-                        console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
                         onRouteRequest('walking', destination);
                       }
                       // Load vehicles for this stop
@@ -433,7 +443,6 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                     const handleStopClick = () => {
                       if (onRouteRequest && stop.position) {
                         const destination = `${stop.position[0]},${stop.position[1]}`;
-                        console.log(`🗺️ Requesting route to ${stop.name} at ${destination}`);
                         onRouteRequest('walking', destination);
                       }
                       // Load vehicles for this stop
@@ -515,7 +524,6 @@ export default function TransportPanel({ userLocation, onRouteRequest, onTranspo
                         }
                         
                         if (destination) {
-                          console.log(`🗺️ Requesting route to ${station.stationName} at ${destination}`);
                           onRouteRequest('walking', destination);
                         } else {
                           console.warn(`No coordinates available for bike station ${station.stationName}`);

@@ -31,7 +31,8 @@ export interface MapMarker {
     | 'landmark'
     | 'viewpoint'
     | 'thermal_bath'
-    | 'spa';
+    | 'spa'
+    | 'trolley';
   icon?: string;
   rating?: number;
   hours?: string;
@@ -261,6 +262,42 @@ export interface VehiclePosition {
   lastUpdate?: string;
 }
 
+export interface MapRouteShape {
+  routeId: string;
+  shape: Array<[number, number]>;
+  color?: string;
+}
+
+export interface ConstructionZone {
+  id: string;
+  position: [number, number];
+  radius: number;
+  description: string;
+}
+
+export interface TransportDisruption {
+  line?: string;
+  type?: string;
+  description?: string;
+  message?: string;
+  from?: string;
+  to?: string;
+}
+
+export type TravelMode = 'walking' | 'cycling' | 'public_transport';
+
+export interface CurrentRoute {
+  polyline: number[][];
+  distance: string;
+  duration: string;
+  mode?: TravelMode;
+  steps?: Array<{
+    type?: string;
+    geometry?: number[][];
+    instruction?: string;
+  }>;
+}
+
 export interface RouteDetail {
   routeId: string;
   routeShortName: string;
@@ -366,7 +403,6 @@ class ApiService {
     } catch (error: any) {
       // 404 means address not found - this is expected for invalid addresses
       if (error.response?.status === 404) {
-        console.info(`ℹ️ Address not found: "${address}"`);
         return null;
       }
       // Network errors or other issues
@@ -415,7 +451,7 @@ class ApiService {
     }
   }
 
-  async getTransportDisruptions(): Promise<any[]> {
+  async getTransportDisruptions(): Promise<TransportDisruption[]> {
     try {
       const response = await this.api.get('/api/transport/disruptions');
       return response.data.disruptions || [];
@@ -425,7 +461,7 @@ class ApiService {
     }
   }
 
-  async getVehiclesForStop(stopId: string): Promise<any[]> {
+  async getVehiclesForStop(stopId: string): Promise<VehiclePosition[]> {
     try {
       const response = await this.api.get(`/api/transport/vehicles/${stopId}`);
       return response.data.vehicles || [];
@@ -435,7 +471,7 @@ class ApiService {
     }
   }
 
-  async getRouteDetails(routeId: string): Promise<any | null> {
+  async getRouteDetails(routeId: string): Promise<RouteDetail | null> {
     try {
       const response = await this.api.get(`/api/transport/route/${routeId}`);
       return response.data.route || null;
@@ -664,7 +700,7 @@ class ApiService {
     lat: number,
     lng: number,
     radius: number = 500
-  ): Promise<any[]> {
+  ): Promise<ConstructionZone[]> {
     try {
       const response = await this.api.get('/api/safety/construction-zones', {
         params: { lat, lng, radius }
@@ -686,7 +722,6 @@ class ApiService {
     } catch (error: any) {
       // Network errors are expected if backend is not running
       if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-        console.info('ℹ️ Backend server not running. App will use fallback/mock responses.');
         return false;
       }
       console.error('Health check failed:', error.message || error);

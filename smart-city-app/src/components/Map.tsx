@@ -4,90 +4,9 @@ import React, { useEffect, useState, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
+import { iconMap, mapIcons } from "@/components/map/icons";
 
-// Fix for default markers in React Leaflet
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-});
-
-// Icon mappings for different marker types
-const iconMap: { [key: string]: string } = {
-  pharmacy: '💊',
-  restaurant: '🍽️',
-  hospital: '🏥',
-  bank: '🏦',
-  metro: '🚇',
-  bus: '🚌',
-  tram: '🚋',
-  bike_station: '🚲',
-  playbook: '📖',
-  highlight: '⭐',
-  historical: '🏛️',
-  landmark: '📍',
-  viewpoint: '👁️',
-  thermal_bath: '♨️',
-  spa: '♨️',
-  default: '📍',
-  destination: '🎯',
-  user: '👤',
-  vehicle_bus: '🚌',
-  vehicle_tram: '🚋',
-  vehicle_metro: '🚇',
-  vehicle_trolley: '🚎'
-};
-
-// Custom icons for different marker types with icons
-const createCustomIcon = (type: string, color: string, size: number = 28) => {
-  const icon = iconMap[type] || iconMap.default;
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `<div style="
-      background-color: ${color}; 
-      width: ${size}px; 
-      height: ${size}px; 
-      border-radius: 50%; 
-      border: 2px solid white; 
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      transition: all 0.3s ease;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: ${size * 0.6}px;
-      line-height: 1;
-    ">${icon}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size/2, size/2]
-  });
-};
-
-const icons = {
-  pharmacy: createCustomIcon('pharmacy', '#10b981'), // green
-  restaurant: createCustomIcon('restaurant', '#f59e0b'), // amber
-  hospital: createCustomIcon('hospital', '#ef4444'), // red
-  bank: createCustomIcon('bank', '#3b82f6'), // blue
-  metro: createCustomIcon('metro', '#dc2626'), // red
-  bus: createCustomIcon('bus', '#2563eb'), // blue
-  tram: createCustomIcon('tram', '#059669'), // green
-  bike_station: createCustomIcon('bike_station', '#7c3aed'), // purple
-  playbook: createCustomIcon('playbook', '#0ea5e9'), // sky
-  highlight: createCustomIcon('highlight', '#ec4899'), // pink
-  historical: createCustomIcon('historical', '#9333ea'), // violet
-  landmark: createCustomIcon('landmark', '#f97316'), // orange
-  viewpoint: createCustomIcon('viewpoint', '#22d3ee'), // teal
-  thermal_bath: createCustomIcon('thermal_bath', '#f97316', 32), // warm orange, larger
-  spa: createCustomIcon('spa', '#f97316', 32), // warm orange, larger
-  default: createCustomIcon('default', '#6b7280'), // gray
-  destination: createCustomIcon('destination', '#8b5cf6'), // purple
-  user: createCustomIcon('user', '#06b6d4'), // cyan
-  vehicle_bus: createCustomIcon('vehicle_bus', '#2563eb', 32), // blue
-  vehicle_tram: createCustomIcon('vehicle_tram', '#059669', 32), // green
-  vehicle_metro: createCustomIcon('vehicle_metro', '#dc2626', 32), // red
-  vehicle_trolley: createCustomIcon('vehicle_trolley', '#7c3aed', 32) // purple
-};
+const icons = mapIcons;
 
 interface MapProps {
   center?: [number, number];
@@ -208,7 +127,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
             // Leaflet uses [lat, lng] format
             setUserLocation([latitude, longitude]);
             setMapCenter([latitude, longitude]);
-            console.log(`✅ User location set in Map component: [${latitude}, ${longitude}] (lat, lng)`);
           } else {
             console.error(`❌ User location outside Budapest: [${latitude}, ${longitude}] - Using Budapest center`);
             // Fallback to Budapest center if location is invalid
@@ -230,9 +148,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
       // Center is in [lat, lng] format for Leaflet
       setMapCenter(center);
       setUserLocation(center); // Use center as user location for marker display
-      console.log(`✅ Using center from parent: [${center[0]}, ${center[1]}] (lat, lng)`);
-      console.log(`   This means: Latitude = ${center[0]}, Longitude = ${center[1]}`);
-      console.log(`   Marker will be positioned at: [${center[0]}, ${center[1]}] (Leaflet format: [lat, lng])`);
     }
   }, [center, isClient]);
 
@@ -262,8 +177,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
       return [];
     }
     
-    console.log(`🗺️ Converting ${route.polyline.length} route coordinates for map display`);
-    console.log(`   Raw first coordinate: [${route.polyline[0]?.[0]}, ${route.polyline[0]?.[1]}]`);
     
     const converted = route.polyline.map((coord: number[], index: number) => {
       if (Array.isArray(coord) && coord.length >= 2) {
@@ -314,9 +227,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
     });
     
     if (converted.length > 0) {
-      console.log(`✅ Converted ${converted.length} valid coordinates (filtered ${route.polyline.length - converted.length} invalid)`);
-      console.log(`   First: [${converted[0][0]}, ${converted[0][1]}] (lat, lng)`);
-      console.log(`   Last: [${converted[converted.length - 1][0]}, ${converted[converted.length - 1][1]}] (lat, lng)`);
     } else {
       console.warn(`⚠️ Route polyline skipped: unable to convert any of the ${route.polyline.length} provided coordinates.`, route.polyline);
     }
@@ -350,7 +260,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
       const isNearEnd = Math.abs(lat - endLat) < 0.0005 && Math.abs(lng - endLng) < 0.0005;
       
       if (isNearStart || isNearEnd) {
-        console.log(`⚠️ Filtering out duplicate marker near route ${isNearStart ? 'start' : 'end'}: ${marker.title}`);
         return false;
       }
     }
@@ -383,7 +292,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
     if (icon) {
       // Log icon selection for metro and tram
       if (type === 'metro' || type === 'tram') {
-        console.log(`📍 Using ${type} icon for marker`);
       }
       return icon;
     }
@@ -636,7 +544,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
               
               // STRICT validation - must be in Budapest
               if (startLat >= 47.0 && startLat <= 48.0 && startLng >= 18.5 && startLng <= 19.5) {
-                console.log(`✅ Route start marker: [${startLat}, ${startLng}] (valid)`);
                 return (
                   <Marker key="route-start" position={startCoord} icon={icons.user}>
                     <Popup>
@@ -662,7 +569,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
               
               // STRICT validation - must be in Budapest
               if (endLat >= 47.0 && endLat <= 48.0 && endLng >= 18.5 && endLng <= 19.5) {
-                console.log(`✅ Route end marker: [${endLat}, ${endLng}] (valid)`);
                 return (
                   <Marker key="route-end" position={endCoord} icon={icons.destination}>
                     <Popup>
@@ -688,14 +594,10 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
           const lat = userLocation[0]; // First element is latitude
           const lng = userLocation[1]; // Second element is longitude
           
-          console.log(`📍 User location marker - Raw array: [${userLocation[0]}, ${userLocation[1]}]`);
-          console.log(`   Interpreted as: Latitude=${lat}, Longitude=${lng}`);
           
           // Validate user location is in Budapest
           if (lat >= 47.0 && lat <= 48.0 && lng >= 18.5 && lng <= 19.5) {
             // userLocation is already in [lat, lng] format, use it directly
-            console.log(`✅ Displaying marker at position: [${lat}, ${lng}] (Leaflet [lat, lng] format)`);
-            console.log(`   This is: Latitude ${lat.toFixed(7)}, Longitude ${lng.toFixed(7)}`);
             
             return (
               <Marker position={userLocation} icon={icons.user}>
@@ -740,7 +642,7 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
                 justify-content: center;
                 font-size: 18px;
                 transform: rotate(${vehicle.bearing}deg);
-              ">${iconMap[vehicleType] || '🚌'}</div>`,
+              ">${iconMap[vehicleType] || "B"}</div>`,
               iconSize: [32, 32],
               iconAnchor: [16, 16]
             }) : vehicleIcon;
@@ -754,7 +656,7 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
               <Popup>
                 <div className="text-sm">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">{iconMap[vehicleType] || '🚌'}</span>
+                    <span className="text-lg font-semibold">{iconMap[vehicleType] || "B"}</span>
                     <div>
                       <strong>Route {vehicle.routeShortName || vehicle.routeId}</strong>
                       {vehicle.wheelchairAccessible && (
@@ -797,7 +699,6 @@ export default function Map({ center, zoom = 13, markers = [], route, vehicles =
             const icon = getMarkerIcon(marker.type);
             // Log metro and tram markers specifically
             if (marker.type === 'metro' || marker.type === 'tram') {
-              console.log(`📍 Displaying ${marker.type} marker: ${marker.title} at [${marker.position[0]}, ${marker.position[1]}]`);
             }
             return (
               <Marker key={index} position={marker.position} icon={icon}>

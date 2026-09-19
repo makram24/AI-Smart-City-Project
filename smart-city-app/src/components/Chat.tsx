@@ -132,8 +132,8 @@ export default function Chat({ onSendMessage, messages, isLoading, persona, onPe
         {messages.length === 0 ? (
           <div className="text-center text-muted-foreground mt-8">
             <MapPin className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Welcome! I can help you find places, get directions, and discover what's happening in Budapest.</p>
-            <p className="text-sm mt-2">Try asking me something like "Find pharmacies near me" or "Best way to get to Buda Castle".</p>
+            <p>Welcome! I can help you find places, get directions, and discover what is happening in Budapest.</p>
+            <p className="text-sm mt-2">Try asking: Find pharmacies near me, or Best way to get to Buda Castle.</p>
           </div>
         ) : (
           messages.map((message) => (

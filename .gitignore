@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!**/env.example
+
+# Logs and OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+coverage/
+
+# Local runtime data
+smart-city-app/backend/data/*.json
+!smart-city-app/backend/data/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { decodePolyline } from './utils/decodePolyline';
 
 export interface TransportStop {
   id: string;
@@ -715,42 +716,6 @@ export class PublicTransportService {
     }
   }
 
-  // Decode Google polyline format (used by BKK API)
-  private decodePolyline(encoded: string): number[][] {
-    const coordinates: number[][] = [];
-    let index = 0;
-    const len = encoded.length;
-    let lat = 0;
-    let lng = 0;
-
-    while (index < len) {
-      let b: number;
-      let shift = 0;
-      let result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      coordinates.push([lat * 1e-5, lng * 1e-5]); // Convert to [lat, lng]
-    }
-
-    return coordinates;
-  }
-
   // Fetch real journey plan from BKK FUTÁR API
   private async fetchRealJourney(from: [number, number], to: [number, number]): Promise<TransportRoutePlan | null> {
     try {
@@ -829,7 +794,7 @@ export class PublicTransportService {
             if (leg.legGeometry?.points) {
               // Encoded polyline - decode it
               try {
-                legGeometry = this.decodePolyline(leg.legGeometry.points);
+                legGeometry = decodePolyline(leg.legGeometry.points);
               } catch (e) {
                 console.warn(`⚠️ Failed to decode polyline for leg ${index}`);
               }
@@ -1612,56 +1577,6 @@ export class PublicTransportService {
       ]
     };
   }
-}
-
-// Export new interfaces
-export interface VehiclePosition {
-  vehicleId: string;
-  routeId: string;
-  routeShortName?: string;
-  tripId?: string;
-  position: [number, number];
-  bearing?: number;
-  speed?: number;
-  licensePlate?: string;
-  wheelchairAccessible?: boolean;
-  lastUpdate?: string;
-}
-
-export interface RouteDetail {
-  routeId: string;
-  routeShortName: string;
-  routeLongName: string;
-  routeType: 'bus' | 'tram' | 'metro' | 'trolley';
-  color?: string;
-  textColor?: string;
-  description?: string;
-  agencyId?: string;
-  stops?: Array<{
-    stopId: string;
-    stopName: string;
-    position: [number, number];
-    sequence: number;
-  }>;
-  shape?: Array<[number, number]>;
-}
-
-export interface TripInfo {
-  tripId: string;
-  routeId: string;
-  routeShortName: string;
-  tripHeadsign: string;
-  directionId?: number;
-  serviceId?: string;
-  shapeId?: string;
-  stops: Array<{
-    stopId: string;
-    stopName: string;
-    position: [number, number];
-    arrivalTime?: string;
-    departureTime?: string;
-    stopSequence: number;
-  }>;
 }
 
 export const publicTransportService = new PublicTransportService();

@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { decodePolyline } from './utils/decodePolyline';
+import { logger } from './utils/logger';
 
 export interface RouteResult {
   distance: number; // meters
@@ -17,14 +19,10 @@ export class RoutingService {
     this.useRealApi = !!this.openRouteApiKey;
     
     if (this.useRealApi) {
-      console.log('✅ OpenRouteService API key found - real routing enabled');
-      console.log(`   Key length: ${this.openRouteApiKey.length} characters`);
+      logger.info('✅ OpenRouteService API key found - real routing enabled');
     } else {
-      console.info('💡 OpenRouteService API key not found - using fallback routes');
-      console.info('   Add OPENROUTESERVICE_API_KEY to .env file to enable real routing');
-      if (process.env.NODE_ENV === 'development') {
-        console.info(`   Debug: process.env.OPENROUTESERVICE_API_KEY = ${process.env.OPENROUTESERVICE_API_KEY ? 'exists' : 'undefined'}`);
-      }
+      logger.info('💡 OpenRouteService API key not found - using fallback routes');
+      logger.info('   Add OPENROUTESERVICE_API_KEY to .env file to enable real routing');
     }
   }
 
@@ -208,7 +206,7 @@ export class RoutingService {
           // Format 3: Encoded polyline string
           else if (typeof route.geometry === 'string') {
             try {
-              const decoded = this.decodePolyline(route.geometry);
+              const decoded = decodePolyline(route.geometry);
               geometry.push(...decoded);
             } catch (e) {
               console.warn('⚠️ Failed to decode polyline, using fallback');
@@ -388,42 +386,6 @@ export class RoutingService {
 
   private deg2rad(deg: number): number {
     return deg * (Math.PI/180);
-  }
-
-  // Decode Google polyline format (used by OpenRouteService)
-  private decodePolyline(encoded: string): number[][] {
-    const coordinates: number[][] = [];
-    let index = 0;
-    const len = encoded.length;
-    let lat = 0;
-    let lng = 0;
-
-    while (index < len) {
-      let b: number;
-      let shift = 0;
-      let result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      coordinates.push([lat * 1e-5, lng * 1e-5]); // Convert to [lat, lng]
-    }
-
-    return coordinates;
   }
 
   // Format duration in human-readable format

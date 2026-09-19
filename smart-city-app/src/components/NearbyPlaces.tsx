@@ -47,7 +47,6 @@ export default function NearbyPlaces({ userLocation, onRouteRequest }: NearbyPla
       const allPlaces = await apiService.getNearbyPlaces(userLocation.lat, userLocation.lng, 1000);
       
       setPlaces(allPlaces);
-      console.log(`📍 Loaded ${allPlaces.length} nearby places`);
     } catch (error) {
       console.error('Error loading nearby places:', error);
       setError('Failed to load nearby places');
@@ -118,7 +117,6 @@ export default function NearbyPlaces({ userLocation, onRouteRequest }: NearbyPla
                           if (onRouteRequest && place.position) {
                             // Convert position [lat, lng] to "lat,lng" string format
                             const destination = `${place.position[0]},${place.position[1]}`;
-                            console.log(`🗺️ Requesting route to ${place.name} at ${destination}`);
                             onRouteRequest('walking', destination);
                           }
                         };

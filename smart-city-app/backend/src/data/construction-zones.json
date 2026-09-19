@@ -1,0 +1,18 @@
+[
+  {
+    "id": "construction_001",
+    "position": [47.4979, 19.0402],
+    "radius": 200,
+    "description": "Road maintenance on Váci Street",
+    "startOffsetDays": -2,
+    "endOffsetDays": 5
+  },
+  {
+    "id": "construction_002",
+    "position": [47.5024, 19.034],
+    "radius": 150,
+    "description": "Castle district renovation",
+    "startOffsetDays": -7,
+    "endOffsetDays": 30
+  }
+]

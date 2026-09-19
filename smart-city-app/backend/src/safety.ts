@@ -1,3 +1,23 @@
+import constructionZonesSeed from './data/construction-zones.json';
+
+interface ConstructionZone {
+  id: string;
+  position: [number, number];
+  radius: number;
+  description: string;
+  startDate: string;
+  endDate?: string;
+}
+
+interface ConstructionZoneSeed {
+  id: string;
+  position: [number, number];
+  radius: number;
+  description: string;
+  startOffsetDays: number;
+  endOffsetDays?: number;
+}
+
 export interface SafetySegment {
   id: string;
   start: [number, number]; // [lat, lng]
@@ -25,14 +45,7 @@ export interface RouteSafetyAnalysis {
 
 export class SafetyService {
   private safetyData: Map<string, SafetySegment[]> = new Map();
-  private constructionZones: Array<{
-    id: string;
-    position: [number, number];
-    radius: number; // meters
-    description: string;
-    startDate: string;
-    endDate?: string;
-  }> = [];
+  private constructionZones: ConstructionZone[] = [];
 
   constructor() {
     this.initializeSafetyData();
@@ -306,30 +319,24 @@ export class SafetyService {
     // For now, we'll use dynamic analysis
   }
 
-  // Initialize construction zones (mock data - could come from city API)
+  // Initialize construction zones from seed data
   private initializeConstructionZones(): void {
-    this.constructionZones = [
-      {
-        id: 'construction_001',
-        position: [47.4979, 19.0402],
-        radius: 200, // meters
-        description: 'Road maintenance on Váci Street',
-        startDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'construction_002',
-        position: [47.5024, 19.034],
-        radius: 150,
-        description: 'Castle district renovation',
-        startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    ];
+    const seed = constructionZonesSeed as ConstructionZoneSeed[];
+    const dayMs = 24 * 60 * 60 * 1000;
+    this.constructionZones = seed.map((zone) => ({
+      id: zone.id,
+      position: zone.position as [number, number],
+      radius: zone.radius,
+      description: zone.description,
+      startDate: new Date(Date.now() + zone.startOffsetDays * dayMs).toISOString(),
+      endDate: zone.endOffsetDays !== undefined
+        ? new Date(Date.now() + zone.endOffsetDays * dayMs).toISOString()
+        : undefined
+    }));
   }
 
   // Get construction zones near a point
-  getConstructionZonesNearPoint(lat: number, lng: number, radius: number = 500): typeof this.constructionZones {
+  getConstructionZonesNearPoint(lat: number, lng: number, radius: number = 500): ConstructionZone[] {
     return this.constructionZones.filter(zone => {
       const distance = this.calculateDistance([lat, lng], zone.position) * 1000; // Convert to meters
       return distance <= radius;

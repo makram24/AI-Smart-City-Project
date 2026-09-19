@@ -11,6 +11,7 @@ interface NeighborhoodPlaybooksProps {
   loadingId?: string | null;
   disabled?: boolean;
   onSelect: (id: string) => void;
+  onClose?: () => void;
 }
 
 function NeighborhoodPlaybooksComponent({

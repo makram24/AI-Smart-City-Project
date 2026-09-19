@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 export interface TransportFeedback {
   id: string;
   routeId: string; // e.g., "Tram 2", "Bus 15", "Metro M2"
@@ -21,11 +24,17 @@ export interface RouteConfidence {
   confidenceLevel: 'high' | 'medium' | 'low'; // Based on feedback count and recency
 }
 
+const DATA_FILE = path.join(__dirname, '..', 'data', 'community-feedback.json');
+
 export class CommunityService {
   private feedbackStore: Map<string, TransportFeedback[]> = new Map();
   private userTrustScores: Map<string, number> = new Map();
   private readonly MIN_FEEDBACK_FOR_CONFIDENCE = 3;
   private readonly TRUST_DECAY_HOURS = 24; // Trust score decays after 24 hours of inactivity
+
+  constructor() {
+    this.loadFromDisk();
+  }
 
   // Submit feedback for a transport route
   submitFeedback(feedback: Omit<TransportFeedback, 'id' | 'timestamp' | 'trustScore' | 'verified'>): TransportFeedback {
@@ -60,6 +69,7 @@ export class CommunityService {
 
     // Clean old feedback (keep only last 7 days)
     this.cleanOldFeedback(routeKey);
+    this.saveToDisk();
 
     return newFeedback;
   }
@@ -172,6 +182,40 @@ export class CommunityService {
   getRouteFeedback(routeId: string, routeType: 'bus' | 'tram' | 'metro' | 'trolley'): TransportFeedback[] {
     const routeKey = `${routeType}_${routeId}`;
     return this.feedbackStore.get(routeKey) || [];
+  }
+
+  private loadFromDisk(): void {
+    try {
+      if (!fs.existsSync(DATA_FILE)) {
+        return;
+      }
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      const parsed = JSON.parse(raw) as {
+        feedbackStore?: Record<string, TransportFeedback[]>;
+        userTrustScores?: Record<string, number>;
+      };
+      if (parsed.feedbackStore && typeof parsed.feedbackStore === 'object') {
+        this.feedbackStore = new Map(Object.entries(parsed.feedbackStore));
+      }
+      if (parsed.userTrustScores && typeof parsed.userTrustScores === 'object') {
+        this.userTrustScores = new Map(Object.entries(parsed.userTrustScores));
+      }
+    } catch {
+      this.feedbackStore = new Map();
+      this.userTrustScores = new Map();
+    }
+  }
+
+  private saveToDisk(): void {
+    const payload = {
+      feedbackStore: Object.fromEntries(this.feedbackStore),
+      userTrustScores: Object.fromEntries(this.userTrustScores)
+    };
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(payload, null, 2), 'utf8');
   }
 }
 

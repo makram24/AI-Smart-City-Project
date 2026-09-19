@@ -1,22 +1,16 @@
-# Dockerfile for AI Smart City Backend
-FROM node:18-alpine
-
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy source code
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-
-# Build TypeScript
 RUN npm run build
 
-# Expose port
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=builder /app/dist ./dist
+RUN mkdir -p /app/data
 EXPOSE 3001
-
-# Start the application
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

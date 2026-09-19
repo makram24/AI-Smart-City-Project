@@ -33,13 +33,12 @@ export default function HistoricalPlaces({ userLocation, onRouteRequest }: Histo
       
       // Sort by distance
       const sortedPlaces = fetchedPlaces.sort((a, b) => {
-        const distA = parseFloat(a.distance.replace(' km', '')) || 999;
-        const distB = parseFloat(b.distance.replace(' km', '')) || 999;
+        const distA = parseFloat((a.distance || "999 km").replace(" km", "")) || 999;
+        const distB = parseFloat((b.distance || "999 km").replace(" km", "")) || 999;
         return distA - distB;
       });
       
       setPlaces(sortedPlaces);
-      console.log(`🏛️ Loaded ${sortedPlaces.length} historical places`);
     } catch (err) {
       console.error('Error loading historical places:', err);
       setError('Failed to load historical places');
@@ -77,7 +76,6 @@ export default function HistoricalPlaces({ userLocation, onRouteRequest }: Histo
                 const handlePlaceClick = () => {
                   if (onRouteRequest && place.position) {
                     const destination = `${place.position[0]},${place.position[1]}`;
-                    console.log(`🗺️ Requesting route to ${place.name} at ${destination}`);
                     onRouteRequest('walking', destination);
                   }
                   setSelectedPlace(place);
@@ -192,7 +190,6 @@ export default function HistoricalPlaces({ userLocation, onRouteRequest }: Histo
                       onClick={() => {
                         if (onRouteRequest && selectedPlace.position) {
                           const destination = `${selectedPlace.position[0]},${selectedPlace.position[1]}`;
-                          console.log(`🗺️ Requesting ${mode} route to ${selectedPlace.name} at ${destination}`);
                           onRouteRequest(mode, destination);
                         }
                       }}
